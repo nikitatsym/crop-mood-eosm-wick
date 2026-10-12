@@ -8,6 +8,7 @@
 #include <patch.h>
 #include <bmp.h>
 #include <lvinfo.h>
+#include <cropmarks.h>
 #include <powersave.h>
 #include <raw.h>
 #include <fps.h>
@@ -6790,7 +6791,7 @@ static int lv_check_is_healthy(void)
  * black for that time (and a moment after, while Canon finishes drawing its x5 screen), so the menu
  * goes straight to the proper framing.  ML then repaints everything with redraw().  Never while
  * recording: the refresh does not run then. */
-#define SLIM_COVER_HOLD_MS  1200
+#define SLIM_COVER_HOLD_MS  600
 #define SLIM_COVER_MAX_MS   4000    /* safety: the overlay lock is never held longer than this */
 
 /* Canon redraws its x5 screen (with arrows) into the overlay layer while the zoom steps run, and
@@ -6839,7 +6840,16 @@ static void slim_cover_hold_and_release(void)
     int n = 0;
     while (slim_cover_task_alive && n++ < 50)
         msleep(20);
-    redraw();
+
+    /* Lift the black WITHOUT redraw(): redraw() repaints Canon's own dialog, which brings Canon's
+     * x5 arrows back for a couple of frames.  Clear the overlay and ask ML to redraw its own
+     * things (film framing, info text, AF frame) instead.  If the framing is somehow missing,
+     * mlv_lite's own safety net still does a full redraw a moment later. */
+    BMP_LOCK( clrscr(); )
+    afframe_set_dirty();
+    crop_set_dirty(10);
+    menu_set_dirty();
+    lens_display_set_dirty();
 }
 
 /* when closing ML menu, check whether we need to refresh the LiveView */
