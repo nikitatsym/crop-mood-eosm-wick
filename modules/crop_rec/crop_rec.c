@@ -6790,21 +6790,48 @@ static int lv_check_is_healthy(void)
  * black for that time (and a moment after, while Canon finishes drawing its x5 screen), so the menu
  * goes straight to the proper framing.  ML then repaints everything with redraw().  Never while
  * recording: the refresh does not run then. */
-#define SLIM_COVER_HOLD_MS  600
+#define SLIM_COVER_HOLD_MS  800
+
+/* Canon redraws its x5 screen (with arrows) into the overlay layer while the zoom steps run, and
+ * those steps block, so a single black fill is painted over.  Keep refilling from a small
+ * background task for the whole refresh. */
+static volatile int slim_cover_on = 0;
+static volatile int slim_cover_task_alive = 0;
 
 static void slim_cover_black(void)
 {
     BMP_LOCK( bmp_fill(COLOR_BLACK, BMP_W_MINUS, BMP_H_MINUS, BMP_TOTAL_WIDTH, BMP_TOTAL_HEIGHT); )
 }
 
+static void slim_cover_task(void *unused)
+{
+    while (slim_cover_on && lv && !gui_menu_shown() && !RECORDING)
+    {
+        slim_cover_black();
+        msleep(25);
+    }
+    slim_cover_task_alive = 0;
+}
+
+static void slim_cover_start(void)
+{
+    slim_cover_black();
+    if (slim_cover_task_alive)
+        return;
+    slim_cover_on = 1;
+    slim_cover_task_alive = 1;
+    task_create("slim_cover", 0x1c, 0x1000, slim_cover_task, (void*)0);
+}
+
 static void slim_cover_hold_and_release(void)
 {
     int t = get_ms_clock();
     while (get_ms_clock() - t < SLIM_COVER_HOLD_MS && lv && !gui_menu_shown() && !RECORDING)
-    {
-        slim_cover_black();
         msleep(40);
-    }
+    slim_cover_on = 0;
+    int n = 0;
+    while (slim_cover_task_alive && n++ < 50)
+        msleep(20);
     redraw();
 }
 
@@ -6936,7 +6963,7 @@ static unsigned int crop_rec_polling_cbr(unsigned int unused)
                 /* CheckPreviewRegsValuesAndForce is intentionally a no-op
                  * on EOS M, so avoid an unnecessary delayed polling wait. */
 #else
-                slim_cover_black();     /* hide the refresh steps (see slim_cover_hold_and_release) */
+                slim_cover_start();     /* hide the refresh steps (see slim_cover_hold_and_release) */
                 wait_lv_frames(2);
                 if (crop_rec_needs_lv_refresh())
                 {
