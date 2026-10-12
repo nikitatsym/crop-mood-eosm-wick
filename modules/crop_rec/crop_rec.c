@@ -6785,6 +6785,29 @@ static int lv_check_is_healthy(void)
     return 1;
 }
 
+/* After an ML menu closes on a mode change, Canon's live view is refreshed in steps: a full-screen
+ * x1 picture, then x5 with Canon's arrows, then ML draws the real framing.  Cover the screen in
+ * black for that time (and a moment after, while Canon finishes drawing its x5 screen), so the menu
+ * goes straight to the proper framing.  ML then repaints everything with redraw().  Never while
+ * recording: the refresh does not run then. */
+#define SLIM_COVER_HOLD_MS  600
+
+static void slim_cover_black(void)
+{
+    BMP_LOCK( bmp_fill(COLOR_BLACK, BMP_W_MINUS, BMP_H_MINUS, BMP_TOTAL_WIDTH, BMP_TOTAL_HEIGHT); )
+}
+
+static void slim_cover_hold_and_release(void)
+{
+    int t = get_ms_clock();
+    while (get_ms_clock() - t < SLIM_COVER_HOLD_MS && lv && !gui_menu_shown() && !RECORDING)
+    {
+        slim_cover_black();
+        msleep(40);
+    }
+    redraw();
+}
+
 /* when closing ML menu, check whether we need to refresh the LiveView */
 static unsigned int crop_rec_polling_cbr(unsigned int unused)
 {
@@ -6913,6 +6936,7 @@ static unsigned int crop_rec_polling_cbr(unsigned int unused)
                 /* CheckPreviewRegsValuesAndForce is intentionally a no-op
                  * on EOS M, so avoid an unnecessary delayed polling wait. */
 #else
+                slim_cover_black();     /* hide the refresh steps (see slim_cover_hold_and_release) */
                 wait_lv_frames(2);
                 if (crop_rec_needs_lv_refresh())
                 {
@@ -6924,6 +6948,7 @@ static unsigned int crop_rec_polling_cbr(unsigned int unused)
                     gui_uilock(UILOCK_NONE);
                     info_led_off();
                 }
+                slim_cover_hold_and_release();
 #endif
             }
 #ifdef CONFIG_EOSM
