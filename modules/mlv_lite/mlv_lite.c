@@ -698,12 +698,6 @@ static int film_frame_rect(int * x, int * y, int * w, int * h)
     const struct film_readout * ro = &film_readouts[film_frames[f].readout];
     int rw = ro->w, kn = ro->kn, kd = ro->kd;
 
-    /* 2/3" 4:3 "Fit": the 2160x1620 readout is shown at the scale of the 2560x1440 one */
-    if (rw == 2160 && crop_rec_preview_fit())
-    {
-        rw = 2560; kn = 9; kd = 32;
-    }
-
     int nw = res_x * 720 / rw;  /* frame size in the 720x480 layer */
     int nh = res_y * kn / kd;
 

@@ -21,7 +21,5 @@ extern WEAK_FUNC(ret_0) int crop_rec_film_format();
 extern WEAK_FUNC(ret_0) int crop_rec_film_standard();
 /* 1 when the active recording format is a VIDEO standard one (2/3" ... 1/4"): ISO is shown as Gain. */
 extern WEAK_FUNC(ret_0) int crop_rec_video_standard();
-/* 1 when the 2/3" 4:3 preview is drawn at the same scale as the 16:9 one (not stretched to fill the screen). */
-extern WEAK_FUNC(ret_0) int crop_rec_preview_fit();
 /* Settings -> Shutter record: 1 = a half-press of the shutter button starts/stops recording. */
 extern WEAK_FUNC(ret_0) int crop_rec_shutter_record();

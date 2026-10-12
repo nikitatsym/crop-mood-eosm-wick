@@ -84,10 +84,8 @@ int main(void)
             else
             {
                 CHECK(!(mask & 8), "VIDEO format %d frame %d must not offer 18 fps (mask %x)", f, k, mask);
-                /* 29.97 is offered on the 2.5K frames and on 1280p; 1440p and 1620p do not run it */
+                /* 29.97 is offered on the 2.5K frames and on 1280p; 1440p does not run it */
                 int ok30 = (ro == FILM_RO_25K || ro == FILM_RO_1280);
-                if (ro == FILM_RO_1620)
-                    CHECK(mask & 2, "VIDEO format %d frame %d (1620p): 25 must be offered (mask %x)", f, k, mask);
                 CHECK(!!(mask & 4) == ok30, "VIDEO format %d frame %d: 29.97 offered=%d, expected %d (mask %x)", f, k, !!(mask & 4), ok30, mask);
             }
         }

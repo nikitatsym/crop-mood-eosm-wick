@@ -4396,7 +4396,7 @@ __attribute__((unused)) static const char * const slim_1x1_ar_labels[5] = {
  *   S8, 8mm              1:1 3:2 1920x1280
  *   VIDEO sizes          1:1 1440p, 1620p 4:3, 2.5K or 1280p: see film_frames[]
  * In the VIDEO standard the Frame choice can move to a different readout (for example
- * 2/3" 16:9 is cut from 1440p and 2/3" 4:3 from 1620p).
+ * 1/2" 16:9 and 4:3 are both cut from 1280p).
  * mlv_lite cuts the window out of the readout and asks crop_rec_film_format() which
  * window to use: the number it returns is the index into film_frames[] in
  * src/film-formats.h (0 = not a film format).
@@ -4443,7 +4443,7 @@ static int slim_film_menu_readout(void)
                 case 1: return slim_unified_preset == 0 ? FILM_RO_3K : -1; /* 2.8K Higher is legacy */
                 case 2: return FILM_RO_1440;
                 case 3: return FILM_RO_1280;
-                case 4: return FILM_RO_1620;
+                case 4: return -1;          /* 1620p 4:3 is not a film format (no 2/3" 4:3 frame) */
             }
     }
     return -1;
@@ -4479,7 +4479,6 @@ static int slim_film_active_readout(void)
             case 2: return FILM_RO_3K;
             case 3: return FILM_RO_1440;
             case 4: return FILM_RO_1280;
-            case 6: return FILM_RO_1620;
         }
     }
     return -1;
@@ -5463,7 +5462,6 @@ static void *crop_rec_touch_exports[] __attribute__((used)) = {
     (void *)&crop_rec_film_format,
     (void *)&crop_rec_film_standard,
     (void *)&crop_rec_video_standard,
-    (void *)&crop_rec_preview_fit,
     (void *)&crop_rec_shutter_record,
     (void *)&crop_rec_lv_transition_busy,
     (void *)&crop_rec_lv_transition_diag,
