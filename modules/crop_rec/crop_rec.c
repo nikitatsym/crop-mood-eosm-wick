@@ -6790,7 +6790,8 @@ static int lv_check_is_healthy(void)
  * black for that time (and a moment after, while Canon finishes drawing its x5 screen), so the menu
  * goes straight to the proper framing.  ML then repaints everything with redraw().  Never while
  * recording: the refresh does not run then. */
-#define SLIM_COVER_HOLD_MS  800
+#define SLIM_COVER_HOLD_MS  1200
+#define SLIM_COVER_MAX_MS   4000    /* safety: the overlay lock is never held longer than this */
 
 /* Canon redraws its x5 screen (with arrows) into the overlay layer while the zoom steps run, and
  * those steps block, so a single black fill is painted over.  Keep refilling from a small
@@ -6805,11 +6806,17 @@ static void slim_cover_black(void)
 
 static void slim_cover_task(void *unused)
 {
-    while (slim_cover_on && lv && !gui_menu_shown() && !RECORDING)
+    /* Hold ML's overlay lock for the whole cover so ML's own bars and info text cannot draw between
+     * the black fills (that showed as flicker).  Canon's own drawing does not use this lock, so the
+     * black is still refilled over it. */
+    int t0 = get_ms_clock();
+    AcquireRecursiveLock(bmp_lock, 0);
+    while (slim_cover_on && lv && !gui_menu_shown() && !RECORDING && get_ms_clock() - t0 < SLIM_COVER_MAX_MS)
     {
-        slim_cover_black();
-        msleep(25);
+        bmp_fill(COLOR_BLACK, BMP_W_MINUS, BMP_H_MINUS, BMP_TOTAL_WIDTH, BMP_TOTAL_HEIGHT);
+        msleep(20);
     }
+    ReleaseRecursiveLock(bmp_lock);
     slim_cover_task_alive = 0;
 }
 
