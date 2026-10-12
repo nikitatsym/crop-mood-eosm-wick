@@ -316,6 +316,7 @@ extern void menu_move_entry_after(const char * menu_name,
 
 /* Tweaks → Slim Settings entry; registered after EOS M button settings. */
 extern void anamorphic_preview_add_slim_menu(void);
+extern void bw_preview_add_slim_menu(void);
 
 extern void menu_remove(const char * name, struct menu_entry * old_entry, int count);
 

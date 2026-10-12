@@ -2134,6 +2134,11 @@ static struct menu_entry bw_preview_menu[] = {
         .help2      = "Only the preview changes. Your recorded raw video keeps all its colour.",
     },
 };
+/* Added from zebra_init(), after the placeholder in zebra_menus[], so it sits in the Monitoring order set there */
+void bw_preview_add_slim_menu(void)
+{
+    menu_add("Overlay", bw_preview_menu, COUNT(bw_preview_menu));
+}
 #define PREVIEW_CONTRAST_AUTO (preview_contrast == 3)
 
 static CONFIG_INT("lv.crazy", preview_crazy, 0);         // range: 0:2
@@ -4579,7 +4584,6 @@ static void tweak_init()
     #ifdef FEATURE_ANAMORPHIC_PREVIEW
     anamorphic_preview_add_slim_menu();
     #endif
-    menu_add("Overlay", bw_preview_menu, COUNT(bw_preview_menu));
     menu_add("Settings", custom_display_menus, COUNT(custom_display_menus));
     menu_add("Display", display_menus, COUNT(display_menus));
 #else

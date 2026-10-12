@@ -3246,91 +3246,6 @@ struct menu_entry zebra_menus[] = {
     },
 #endif
     #endif
-    #ifdef FEATURE_ZEBRA
-#ifdef CONFIG_SLIM_MENUS
-    {
-        .name = "Zebras",
-        .priv       = &zebra_draw,
-        .max = ZEBRA_MODE_MAX,
-        .icon_type = IT_DICE,
-        .choices = CHOICES("OFF", "Over", "Over+Under"),
-        .update     = zebra_slim_mode_display,
-        .edit_mode = EM_INLINE_ADJUST,
-        .help = "RAW sensor zebras for clipped highlights and dark shadows.",
-        .help2 = "Over+Under adds dark-blue pixels at the 0 EV noise floor.",
-    },
-#else
-    {
-        .name = "Zebras",
-        .priv       = &zebra_draw,
-        .update     = zebra_draw_display,
-        .max = 1,
-        .help = "Zebra stripes: show overexposed or underexposed areas.",
-        .depends_on = DEP_GLOBAL_DRAW | DEP_EXPSIM,
-        .children =  (struct menu_entry[]) {
-            {
-                .name = "Color Space",
-                .priv = &zebra_colorspace, 
-                #ifdef FEATURE_ZEBRA_FAST
-                .max = 2,
-#else
-                .max = 1,
-                #endif
-                .choices = (const char *[]) {"Luma", "RGB", "Luma Fast"},
-                .icon_type = IT_DICE,
-                .update = zebra_param_not_used_for_raw,
-                .help = "Luma: red/blue. RGB: show color of the clipped channel(s).",
-            },
-            {
-                .name = "Underexposure",
-                .priv = &zebra_level_lo, 
-                .min = 0,
-                .max = 20,
-                .icon_type = IT_PERCENT_OFF,
-                .update = zebra_level_display,
-                .help = "Underexposure threshold.",
-            },
-            {
-                .name = "Overexposure", 
-                .priv = &zebra_level_hi,
-                .min = 70,
-                .max = 101,
-                .icon_type = IT_PERCENT_OFF,
-                .update = zebra_level_display,
-                .help = "Overexposure threshold.",
-            },
-            #ifdef CONFIG_MOVIE
-            {
-                .name = "When recording", 
-                .priv = &zebra_rec,
-                .max = 1,
-                .choices = (const char *[]) {"Hide", "Show"},
-                .help = "You can hide zebras when recording.",
-            },
-            #endif
-            #ifdef FEATURE_RAW_ZEBRAS
-            {
-                .name = "Use RAW zebras",
-                .priv = &raw_zebra_enable,
-                .max = 2,
-                .update = raw_zebra_update,
-                .choices = (const char *[]) {"OFF", "Always", "Photo only"},
-                .help = "Use RAW zebras if possible.",
-            },
-            {
-                .name = "Raw zebra underexposure",
-                .priv = &zebra_raw_underexposure,
-                .max = 5,
-                .choices = (const char *[]) {"OFF", "0 EV", "1 EV", "2 EV", "3 EV", "4 EV"},
-                .help = "RAW zebra underexposure threshold",
-                .help2 = "(in EVs above the noise floor)"
-            },
-            #endif
-            MENU_EOL
-        },
-    },
-#endif
-    #endif
 
     #ifdef FEATURE_FOCUS_PEAK_DISP_FILTER
         #ifndef FEATURE_FOCUS_PEAK
@@ -3351,21 +3266,6 @@ struct menu_entry zebra_menus[] = {
         .edit_mode = EM_INLINE_ADJUST,
         .help = "DIGIC preview assistance; does not affect the recording.",
         .help2 = "Sharper Image is subtle; Edge Detect is monochrome.",
-        .depends_on = DEP_LIVEVIEW,
-    },
-    {
-        .name = "LUT Preview",
-        .priv = &lut_preview,
-        .select = lut_preview_toggle,
-        .update = lut_preview_menu_update,
-        .max = 5,
-        /* Filenames are populated dynamically, so menu auto-detection cannot
-         * infer a dice control from .choices. Without this, value 0 is
-         * misclassified as a disabled percentage row. */
-        .icon_type = IT_DICE,
-        .edit_mode = EM_INLINE_ADJUST,
-        .help = "Preview-only 3D LUT. Recorded RAW/MLV stays unchanged.",
-        .help2 = "Copy up to 5 named standard .cube LUTs to ML/LUTS and select with Left/Right.",
         .depends_on = DEP_LIVEVIEW,
     },
 #else
@@ -3437,119 +3337,78 @@ struct menu_entry zebra_menus[] = {
     },
 #endif
     #endif
-    #ifdef FEATURE_MAGIC_ZOOM
-#ifndef CONFIG_SLIM_MENUS
-    {
-        .name = "Magic Zoom",
-        .priv = &zoom_overlay_enabled,
-        .update = zoom_overlay_display,
-        .min = 0,
-        .max = 1,
-        .help = "Zoom box for checking focus. Can be used while recording.",
-        .submenu_width = 650,
-        .depends_on = DEP_GLOBAL_DRAW | DEP_LIVEVIEW,
-        .children =  (struct menu_entry[]) {
-            {
-                .name = "Trigger mode",
-                .priv = &zoom_overlay_trigger_mode, 
-                .min = 1,
-                .max = 4,
-                #ifdef CONFIG_ZOOM_BTN_NOT_WORKING_WHILE_RECORDING
-                .choices = (const char *[]) {"HalfShutter", "Focus Ring", "FocusR+HalfS", "Always On"},
-                .help = "Trigger Magic Zoom by focus ring or half-shutter.",
-#else
-                .choices = (const char *[]) {"Zoom.REC", "Focus+ZREC", "ZoomIn (+)", "Always On"},
-                .help = "Zoom when recording / trigger from focus ring / Zoom button",
-                #endif
-            },
-            {
-                .name = "Size", 
-                .priv = &zoom_overlay_size,
-                #ifdef FEATURE_MAGIC_ZOOM_FULL_SCREEN // most new cameras can do fullscreen :)
-                .max = 3,
-                .help = "Size of zoom box (small / medium / large / full screen).",
-#else
-                .max = 2,
-                .help = "Size of zoom box (small / medium / large).",
-                #endif
-                .choices = (const char *[]) {"Small", "Medium", "Large", "FullScreen"},
-                .icon_type = IT_SIZE,
-            },
-            {
-                .name = "Position", 
-                .priv = &zoom_overlay_pos,
-                .max = 4,
-                .choices = (const char *[]) {"Focus box", "Top-Left", "Top-Right", "Bottom-Right", "Bottom-Left"},
-                .icon_type = IT_DICE,
-                .help = "Position of zoom box (fixed or linked to focus box).",
-            },
-            {
-                .name = "Magnification", 
-                .priv = &zoom_overlay_x,
-                .max = 2,
-                .choices = (const char *[]) {"1:1", "2:1", "3:1", "4:1"},
-                .icon_type = IT_SIZE,
-                .help = "1:1 displays recorded pixels, 2:1 displays them doubled.",
-            },
-            #ifdef CONFIG_LV_FOCUS_INFO
-            {
-                .name = "Focus confirm", 
-                .priv = &zoom_overlay_split,
-                .max = 2,
-                .choices = (const char *[]) {"Green Bars", "SplitScreen", "SS ZeroCross"},
-                .icon_type = IT_DICE,
-                .help = "How to show focus confirmation (green bars / split screen).",
-            },
-            #endif
-            /*{
-                .name = "Look-up Table", 
-                .priv = &zoom_overlay_lut,
-                .max = 1,
-                .choices = (const char *[]) {"OFF", "CineStyle"},
-                .help = "LUT for increasing contrast in the zoom box.",
-            },*/
-            MENU_EOL
-        },
-    },
-#endif
-    #endif
-    #ifdef FEATURE_CROPMARKS
-    MENU_PLACEHOLDER("Cropmarks"),
-    #endif
-    #ifdef FEATURE_GHOST_IMAGE
-        #ifndef FEATURE_CROPMARKS
-        #error This requires FEATURE_CROPMARKS.
-        #endif
+    #ifdef FEATURE_HISTOGRAM
 #ifdef CONFIG_SLIM_MENUS
     {
-        .name = "Ghost image",
-        .priv = &transparent_overlay,
-        .max = 1,
-        .icon_type = IT_BOOL,
+        .name = "Histogram",
+        .priv       = &hist_draw,
+        .max = MONITOR_PERFORMANCE,
+        .icon_type = IT_DICE,
         .choices = CHOICES("OFF", "ON"),
+        .update     = monitoring_mode_display,
         .edit_mode = EM_INLINE_ADJUST,
-        .help = "Overlay any image in LiveView. In PLAY mode, press LV btn.",
-        .help2 = "Dial L/R toggles ON/OFF.",
-        .works_best_in = DEP_LIVEVIEW,
+        .help = "RAW luma histogram on a linear scale.",
+        .help2 = "Off: disabled. On: performance refresh.",
     },
 #else
     {
-        .name = "Ghost image",
-        .priv = &transparent_overlay, 
-        .update = transparent_overlay_display, 
+        .name = "Histogram",
+        .priv       = &hist_draw,
         .max = 1,
-        .help = "Overlay any image in LiveView. In PLAY mode, press LV btn.",
-        .depends_on = DEP_GLOBAL_DRAW,
-        .works_best_in = DEP_LIVEVIEW, // it will actually go into LV if it's not
+        .update = hist_print,
+        .help = "Exposure aid: shows the distribution of brightness levels.",
+        .depends_on = DEP_GLOBAL_DRAW | DEP_EXPSIM,
+        .submenu_width = 700,
         .children =  (struct menu_entry[]) {
             {
-                .name = "Auto-update",
-                .priv = &transparent_overlay_auto_update, 
+                .name = "Histogram type",
+                .priv = &hist_type,
+                .update = raw_histo_update,
+                #ifdef FEATURE_RAW_HISTOGRAM
+                .max = 3,
+#else
                 .max = 1,
-                .help = "Update the overlay whenever you take a picture.",
+                #endif
+                .choices = (const char *[]) {
+                    "YUV-based, Luma",
+                    "YUV-based, RGB",
+                    "RAW-based (RGB)",
+                    "RAW HistoBar (MAX)",
+                },
+                .icon_type = IT_DICE,
+                .help  = "Choose between YUV-based (JPG) or RAW-based histogram.",
+                .help2 = "If RAW data is not available, it will fall back to YUV-based.",
+            },
+            #ifdef FEATURE_RAW_HISTOGRAM
+            {
+                .name = "RAW EV indicator",
+                .priv = &hist_meter,
+                .max = 2,
+                .choices = CHOICES("OFF", "Dynamic Range", "ETTR hint"),
+                .help = "Choose an EV image indicator to display on the histogram.",
+                .help2 = 
+                    " \n"
+                    "Display the dynamic range at current ISO, from noise stdev.\n"
+                    "Show how many stops you can push the exposure to the right.\n"
+            },
+            #endif
+            {
+                .name = "Scaling",
+                .priv = &hist_log, 
+                .max = 1,
+                .choices = (const char *[]) {"Linear", "Log"},
+                .help = "Linear or logarithmic histogram.",
+                .icon_type = IT_DICE,
+            },
+            {
+                .name = "Clip warning",
+                .priv = &hist_warn, 
+                .max = 1,
+                .help = "Display warning dots when one color channel is clipped.",
+                .help2 = "Numbers represent the percentage of pixels clipped.",
             },
             MENU_EOL
-        }
+        },
     },
 #endif
     #endif
@@ -3642,81 +3501,6 @@ struct menu_entry zebra_menus[] = {
     },
 #endif
     #endif
-    #ifdef FEATURE_HISTOGRAM
-#ifdef CONFIG_SLIM_MENUS
-    {
-        .name = "Histogram",
-        .priv       = &hist_draw,
-        .max = MONITOR_PERFORMANCE,
-        .icon_type = IT_DICE,
-        .choices = CHOICES("OFF", "ON"),
-        .update     = monitoring_mode_display,
-        .edit_mode = EM_INLINE_ADJUST,
-        .help = "RAW luma histogram on a linear scale.",
-        .help2 = "Off: disabled. On: performance refresh.",
-    },
-#else
-    {
-        .name = "Histogram",
-        .priv       = &hist_draw,
-        .max = 1,
-        .update = hist_print,
-        .help = "Exposure aid: shows the distribution of brightness levels.",
-        .depends_on = DEP_GLOBAL_DRAW | DEP_EXPSIM,
-        .submenu_width = 700,
-        .children =  (struct menu_entry[]) {
-            {
-                .name = "Histogram type",
-                .priv = &hist_type,
-                .update = raw_histo_update,
-                #ifdef FEATURE_RAW_HISTOGRAM
-                .max = 3,
-#else
-                .max = 1,
-                #endif
-                .choices = (const char *[]) {
-                    "YUV-based, Luma",
-                    "YUV-based, RGB",
-                    "RAW-based (RGB)",
-                    "RAW HistoBar (MAX)",
-                },
-                .icon_type = IT_DICE,
-                .help  = "Choose between YUV-based (JPG) or RAW-based histogram.",
-                .help2 = "If RAW data is not available, it will fall back to YUV-based.",
-            },
-            #ifdef FEATURE_RAW_HISTOGRAM
-            {
-                .name = "RAW EV indicator",
-                .priv = &hist_meter,
-                .max = 2,
-                .choices = CHOICES("OFF", "Dynamic Range", "ETTR hint"),
-                .help = "Choose an EV image indicator to display on the histogram.",
-                .help2 = 
-                    " \n"
-                    "Display the dynamic range at current ISO, from noise stdev.\n"
-                    "Show how many stops you can push the exposure to the right.\n"
-            },
-            #endif
-            {
-                .name = "Scaling",
-                .priv = &hist_log, 
-                .max = 1,
-                .choices = (const char *[]) {"Linear", "Log"},
-                .help = "Linear or logarithmic histogram.",
-                .icon_type = IT_DICE,
-            },
-            {
-                .name = "Clip warning",
-                .priv = &hist_warn, 
-                .max = 1,
-                .help = "Display warning dots when one color channel is clipped.",
-                .help2 = "Numbers represent the percentage of pixels clipped.",
-            },
-            MENU_EOL
-        },
-    },
-#endif
-    #endif
     #ifdef FEATURE_WAVEFORM
 #ifdef CONFIG_SLIM_MENUS
     {
@@ -3750,6 +3534,229 @@ struct menu_entry zebra_menus[] = {
             MENU_EOL
         },
         //.essential = FOR_LIVEVIEW | FOR_PLAYBACK,
+    },
+#endif
+    #endif
+    #ifdef FEATURE_ZEBRA
+#ifdef CONFIG_SLIM_MENUS
+    {
+        .name = "Zebras",
+        .priv       = &zebra_draw,
+        .max = ZEBRA_MODE_MAX,
+        .icon_type = IT_DICE,
+        .choices = CHOICES("OFF", "Over", "Over+Under"),
+        .update     = zebra_slim_mode_display,
+        .edit_mode = EM_INLINE_ADJUST,
+        .help = "RAW sensor zebras for clipped highlights and dark shadows.",
+        .help2 = "Over+Under adds dark-blue pixels at the 0 EV noise floor.",
+    },
+#else
+    {
+        .name = "Zebras",
+        .priv       = &zebra_draw,
+        .update     = zebra_draw_display,
+        .max = 1,
+        .help = "Zebra stripes: show overexposed or underexposed areas.",
+        .depends_on = DEP_GLOBAL_DRAW | DEP_EXPSIM,
+        .children =  (struct menu_entry[]) {
+            {
+                .name = "Color Space",
+                .priv = &zebra_colorspace, 
+                #ifdef FEATURE_ZEBRA_FAST
+                .max = 2,
+#else
+                .max = 1,
+                #endif
+                .choices = (const char *[]) {"Luma", "RGB", "Luma Fast"},
+                .icon_type = IT_DICE,
+                .update = zebra_param_not_used_for_raw,
+                .help = "Luma: red/blue. RGB: show color of the clipped channel(s).",
+            },
+            {
+                .name = "Underexposure",
+                .priv = &zebra_level_lo, 
+                .min = 0,
+                .max = 20,
+                .icon_type = IT_PERCENT_OFF,
+                .update = zebra_level_display,
+                .help = "Underexposure threshold.",
+            },
+            {
+                .name = "Overexposure", 
+                .priv = &zebra_level_hi,
+                .min = 70,
+                .max = 101,
+                .icon_type = IT_PERCENT_OFF,
+                .update = zebra_level_display,
+                .help = "Overexposure threshold.",
+            },
+            #ifdef CONFIG_MOVIE
+            {
+                .name = "When recording", 
+                .priv = &zebra_rec,
+                .max = 1,
+                .choices = (const char *[]) {"Hide", "Show"},
+                .help = "You can hide zebras when recording.",
+            },
+            #endif
+            #ifdef FEATURE_RAW_ZEBRAS
+            {
+                .name = "Use RAW zebras",
+                .priv = &raw_zebra_enable,
+                .max = 2,
+                .update = raw_zebra_update,
+                .choices = (const char *[]) {"OFF", "Always", "Photo only"},
+                .help = "Use RAW zebras if possible.",
+            },
+            {
+                .name = "Raw zebra underexposure",
+                .priv = &zebra_raw_underexposure,
+                .max = 5,
+                .choices = (const char *[]) {"OFF", "0 EV", "1 EV", "2 EV", "3 EV", "4 EV"},
+                .help = "RAW zebra underexposure threshold",
+                .help2 = "(in EVs above the noise floor)"
+            },
+            #endif
+            MENU_EOL
+        },
+    },
+#endif
+    #endif
+    #ifdef FEATURE_CROPMARKS
+    MENU_PLACEHOLDER("Cropmarks"),
+    #endif
+    #ifdef CONFIG_SLIM_MENUS
+    MENU_PLACEHOLDER("B&W Preview"),
+    #endif
+    #ifdef FEATURE_FOCUS_PEAK
+#ifdef CONFIG_SLIM_MENUS
+    {
+        .name = "LUT Preview",
+        .priv = &lut_preview,
+        .select = lut_preview_toggle,
+        .update = lut_preview_menu_update,
+        .max = 5,
+        /* Filenames are populated dynamically, so menu auto-detection cannot
+         * infer a dice control from .choices. Without this, value 0 is
+         * misclassified as a disabled percentage row. */
+        .icon_type = IT_DICE,
+        .edit_mode = EM_INLINE_ADJUST,
+        .help = "Preview-only 3D LUT. Recorded RAW/MLV stays unchanged.",
+        .help2 = "Copy up to 5 named standard .cube LUTs to ML/LUTS and select with Left/Right.",
+        .depends_on = DEP_LIVEVIEW,
+    },
+#endif
+    #endif
+    #ifdef FEATURE_MAGIC_ZOOM
+#ifndef CONFIG_SLIM_MENUS
+    {
+        .name = "Magic Zoom",
+        .priv = &zoom_overlay_enabled,
+        .update = zoom_overlay_display,
+        .min = 0,
+        .max = 1,
+        .help = "Zoom box for checking focus. Can be used while recording.",
+        .submenu_width = 650,
+        .depends_on = DEP_GLOBAL_DRAW | DEP_LIVEVIEW,
+        .children =  (struct menu_entry[]) {
+            {
+                .name = "Trigger mode",
+                .priv = &zoom_overlay_trigger_mode, 
+                .min = 1,
+                .max = 4,
+                #ifdef CONFIG_ZOOM_BTN_NOT_WORKING_WHILE_RECORDING
+                .choices = (const char *[]) {"HalfShutter", "Focus Ring", "FocusR+HalfS", "Always On"},
+                .help = "Trigger Magic Zoom by focus ring or half-shutter.",
+#else
+                .choices = (const char *[]) {"Zoom.REC", "Focus+ZREC", "ZoomIn (+)", "Always On"},
+                .help = "Zoom when recording / trigger from focus ring / Zoom button",
+                #endif
+            },
+            {
+                .name = "Size", 
+                .priv = &zoom_overlay_size,
+                #ifdef FEATURE_MAGIC_ZOOM_FULL_SCREEN // most new cameras can do fullscreen :)
+                .max = 3,
+                .help = "Size of zoom box (small / medium / large / full screen).",
+#else
+                .max = 2,
+                .help = "Size of zoom box (small / medium / large).",
+                #endif
+                .choices = (const char *[]) {"Small", "Medium", "Large", "FullScreen"},
+                .icon_type = IT_SIZE,
+            },
+            {
+                .name = "Position", 
+                .priv = &zoom_overlay_pos,
+                .max = 4,
+                .choices = (const char *[]) {"Focus box", "Top-Left", "Top-Right", "Bottom-Right", "Bottom-Left"},
+                .icon_type = IT_DICE,
+                .help = "Position of zoom box (fixed or linked to focus box).",
+            },
+            {
+                .name = "Magnification", 
+                .priv = &zoom_overlay_x,
+                .max = 2,
+                .choices = (const char *[]) {"1:1", "2:1", "3:1", "4:1"},
+                .icon_type = IT_SIZE,
+                .help = "1:1 displays recorded pixels, 2:1 displays them doubled.",
+            },
+            #ifdef CONFIG_LV_FOCUS_INFO
+            {
+                .name = "Focus confirm", 
+                .priv = &zoom_overlay_split,
+                .max = 2,
+                .choices = (const char *[]) {"Green Bars", "SplitScreen", "SS ZeroCross"},
+                .icon_type = IT_DICE,
+                .help = "How to show focus confirmation (green bars / split screen).",
+            },
+            #endif
+            /*{
+                .name = "Look-up Table", 
+                .priv = &zoom_overlay_lut,
+                .max = 1,
+                .choices = (const char *[]) {"OFF", "CineStyle"},
+                .help = "LUT for increasing contrast in the zoom box.",
+            },*/
+            MENU_EOL
+        },
+    },
+#endif
+    #endif
+    #ifdef FEATURE_GHOST_IMAGE
+        #ifndef FEATURE_CROPMARKS
+        #error This requires FEATURE_CROPMARKS.
+        #endif
+#ifdef CONFIG_SLIM_MENUS
+    {
+        .name = "Ghost image",
+        .priv = &transparent_overlay,
+        .max = 1,
+        .icon_type = IT_BOOL,
+        .choices = CHOICES("OFF", "ON"),
+        .edit_mode = EM_INLINE_ADJUST,
+        .help = "Overlay any image in LiveView. In PLAY mode, press LV btn.",
+        .help2 = "Dial L/R toggles ON/OFF.",
+        .works_best_in = DEP_LIVEVIEW,
+    },
+#else
+    {
+        .name = "Ghost image",
+        .priv = &transparent_overlay, 
+        .update = transparent_overlay_display, 
+        .max = 1,
+        .help = "Overlay any image in LiveView. In PLAY mode, press LV btn.",
+        .depends_on = DEP_GLOBAL_DRAW,
+        .works_best_in = DEP_LIVEVIEW, // it will actually go into LV if it's not
+        .children =  (struct menu_entry[]) {
+            {
+                .name = "Auto-update",
+                .priv = &transparent_overlay_auto_update, 
+                .max = 1,
+                .help = "Update the overlay whenever you take a picture.",
+            },
+            MENU_EOL
+        }
     },
 #endif
     #endif
@@ -5223,6 +5230,9 @@ static void zebra_init()
     //~ menu_add( "Config", cfg_menus, COUNT(cfg_menus) );
     #ifdef FEATURE_CROPMARKS
     menu_add( "Overlay", cropmarks_menu, COUNT(cropmarks_menu) );
+    #endif
+    #ifdef CONFIG_SLIM_MENUS
+    bw_preview_add_slim_menu();     /* fills the "B&W Preview" placeholder, after Cropmarks */
     #endif
 }
 
