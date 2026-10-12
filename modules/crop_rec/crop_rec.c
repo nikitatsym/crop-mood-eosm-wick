@@ -1678,6 +1678,8 @@ static unsigned YUV_HD_S_V_E = 0;     // YUV (HD) enable vertical stretch 0xC0F1
 static unsigned YUV_LV_S_V = 0;       // YUV (LV) vertical stretch        0xC0F11ACC
 static unsigned YUV_LV_Buf = 0;       // YUV (LV) buffer size             0xC0F04210
 int is_LCD_Output();                  // defined with the HDMI output helpers below
+int is_1080i_Full_Output();           // same
+int crop_rec_preview_fit();           // 2/3" 4:3 preview drawn at the 16:9 scale (see below)
 
 /* used to exceed preview limits */
 //static unsigned EDMAC_24_s = 0;       // EDMAC#24 size                    0xC0F26810
@@ -1878,6 +1880,10 @@ static inline uint32_t reg_override_1X1(uint32_t reg, uint32_t old_val)
         
         YUV_HD_S_H    = 0x1050220 + reg_YUV_HD_S_H; //+ 50
         YUV_HD_S_V    = 0x1050240 + reg_YUV_HD_S_V;
+        /* Fit: horizontal scale of the 1440p picture (0x286) instead of the one that stretches the
+         * 2156 px to the full line, so the picture is 84 % as wide as the screen and not stretched */
+        if (crop_rec_preview_fit())
+            YUV_HD_S_H = 0x1050286 + reg_YUV_HD_S_H;
         
         //doktorkrek suggestion (same as dannephoto — leave 0xC0F11A8C alone)
         /* These two values are for the camera LCD only (720 px line pitch: 0x5A0).  Over HDMI they
@@ -1886,8 +1892,8 @@ static inline uint32_t reg_override_1X1(uint32_t reg, uint32_t old_val)
          * SetAspectRatioCorrectionValues(). */
         if (is_LCD_Output())
         {
-            YUV_LV_Buf = 0x1B505A0;
-            YUV_LV_S_V = 0x10501B2;
+            if (crop_rec_preview_fit()) { YUV_LV_Buf = 0x1C805A0; YUV_LV_S_V = 0x10501A0; }
+            else                        { YUV_LV_Buf = 0x1B505A0; YUV_LV_S_V = 0x10501B2; }
         }
         //EngDrvOutLV(0xC0F11A8C, 0x1E0038);
                         
@@ -3142,6 +3148,19 @@ int is_1080i_Info_Output()
     return 0;
 }
 
+/* The 2160x1620 (4:3) readout of the VIDEO 2/3" size.  Canon's scaler stretches it to fill the whole
+ * screen, while every 16:9 mode shows its picture in a smaller window.  "Fit" draws it at the SAME
+ * scale as the 1440p (16:9) picture instead, so 4:3 simply grows taller than the 16:9 window and is
+ * not stretched sideways.  Only done where the picture buffer has room for it and the values are
+ * worked out (camera LCD, HDMI full-screen); the other HDMI layouts keep the old fill. */
+int crop_rec_preview_fit()
+{
+    return is_EOSM &&
+           CROP_PRESET_MENU == CROP_PRESET_1X1 &&
+           crop_preset_1x1_res == 6 &&
+           (is_LCD_Output() || is_1080i_Full_Output());
+}
+
 static uint32_t ShiftAddress  = 0;
 static uint32_t ClearAddress  = 0;
 static uint32_t DefaultShift  = 0; // expected value which we want to patch
@@ -3155,6 +3174,16 @@ int GetShiftValue()
     {
         switch (crop_preset_1x1_res)
          {
+            case 6:     // CROP_1620p: centre the picture (without a shift it sat at the top, black strip at the bottom)
+            {
+                /* values are the centring offset in bytes: lines * line pitch + 2 * pixels from the left */
+                if (is_LCD_Output())  return crop_rec_preview_fit() ? 0x43F0 : 0x7BC0;   /* 12 or 22 lines of 1440, 56 px */
+                if (is_1080i_Full_Output()) return crop_rec_preview_fit() ? 0x10F78 : 0x2772C;
+                if (is_480p_Output()) return 0xB9E0;     /* same picture as the 1440p one */
+                if (is_1080i_Info_Output()) return 0x33B58;
+                return 0;
+            }
+
             case 0:
             case 1:
             {
@@ -3238,7 +3267,9 @@ void SetAspectRatioCorrectionValues()
                 case 1:                                                         // CROP_2_8K
                 case 2:  YUV_LV_Buf = 0x13305A0; YUV_LV_S_V = 0x1050248; break; // CROP_3K
                 case 3:  YUV_LV_Buf = 0x19505A0; YUV_LV_S_V = 0x10501BA; break; // CROP_1440p
-                case 6:  YUV_LV_Buf = 0x1B505A0; YUV_LV_S_V = 0x10501B2; break; // CROP_1620p (dannephoto)
+                case 6:  if (crop_rec_preview_fit()) { YUV_LV_Buf = 0x1C805A0; YUV_LV_S_V = 0x10501A0; }   // 456 lines: same scale as 16:9
+                         else                        { YUV_LV_Buf = 0x1B505A0; YUV_LV_S_V = 0x10501B2; }   // 437 lines, fills the screen (dannephoto)
+                         break;                                                  // CROP_1620p
                 default: YUV_LV_Buf = 0x1DF05A0; YUV_LV_S_V = 0x1E002B;  break;
             }
         }
@@ -3267,7 +3298,9 @@ void SetAspectRatioCorrectionValues()
                 case 2:                                                         // CROP_3K
                          YUV_LV_Buf = 0x1580CA8; YUV_LV_S_V = 0x1050209; break;
                 case 3:  YUV_LV_Buf = 0x1C70CA8; YUV_LV_S_V = 0x105018A; break; // CROP_1440p
-                case 6:  YUV_LV_Buf = 0x1C70CA8; YUV_LV_S_V = 0x105018A; break; // CROP_1620p (the 1440p pair, see 480p)
+                case 6:  if (crop_rec_preview_fit()) { YUV_LV_Buf = 0x2000CA8; YUV_LV_S_V = 0x1050173; }   // 512 lines: same scale as 16:9 (worked out, untested)
+                         else                        { YUV_LV_Buf = 0x1C70CA8; YUV_LV_S_V = 0x105018A; }
+                         break;                                                  // CROP_1620p
                 default: YUV_LV_Buf = 0x21B0CA8; YUV_LV_S_V = 0x8700AC;  break;
             }
         }
@@ -3487,7 +3520,7 @@ static void FAST PATH_SelectPathDriveMode_hook(uint32_t* regs, uint32_t* stack, 
     
     if (crop_preset_1x1_res == 6)    // CROP_1620p
     {
-        Shift_Preview = 0;
+        Shift_Preview = 1;
         Clear_Artifacts = 1;
         EDMAC_9_Vertical_Change = 0;
     }
@@ -5430,6 +5463,7 @@ static void *crop_rec_touch_exports[] __attribute__((used)) = {
     (void *)&crop_rec_film_format,
     (void *)&crop_rec_film_standard,
     (void *)&crop_rec_video_standard,
+    (void *)&crop_rec_preview_fit,
     (void *)&crop_rec_shutter_record,
     (void *)&crop_rec_lv_transition_busy,
     (void *)&crop_rec_lv_transition_diag,
