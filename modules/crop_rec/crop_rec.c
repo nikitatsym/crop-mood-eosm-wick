@@ -1677,6 +1677,7 @@ static unsigned YUV_HD_S_V_E = 0;     // YUV (HD) enable vertical stretch 0xC0F1
 /* used to correct aspect ratio on screen */
 static unsigned YUV_LV_S_V = 0;       // YUV (LV) vertical stretch        0xC0F11ACC
 static unsigned YUV_LV_Buf = 0;       // YUV (LV) buffer size             0xC0F04210
+int is_LCD_Output();                  // defined with the HDMI output helpers below
 
 /* used to exceed preview limits */
 //static unsigned EDMAC_24_s = 0;       // EDMAC#24 size                    0xC0F26810
@@ -1879,8 +1880,15 @@ static inline uint32_t reg_override_1X1(uint32_t reg, uint32_t old_val)
         YUV_HD_S_V    = 0x1050240 + reg_YUV_HD_S_V;
         
         //doktorkrek suggestion (same as dannephoto — leave 0xC0F11A8C alone)
-        YUV_LV_Buf = 0x1B505A0;
-        YUV_LV_S_V = 0x10501B2;
+        /* These two values are for the camera LCD only (720 px line pitch: 0x5A0).  Over HDMI they
+         * were left in place too, so the picture was written with the wrong line pitch and came out
+         * as streaks (register dump REG02).  HDMI gets its own values from
+         * SetAspectRatioCorrectionValues(). */
+        if (is_LCD_Output())
+        {
+            YUV_LV_Buf = 0x1B505A0;
+            YUV_LV_S_V = 0x10501B2;
+        }
         //EngDrvOutLV(0xC0F11A8C, 0x1E0038);
                         
         Black_Bar     = 2;
@@ -3243,6 +3251,9 @@ void SetAspectRatioCorrectionValues()
                 case 2:                                                         // CROP_3K
                          YUV_LV_Buf = 0x1170520; YUV_LV_S_V = 0x1050282; break;
                 case 3:  YUV_LV_Buf = 0x1710520; YUV_LV_S_V = 0x10501E5; break; // CROP_1440p
+                /* 1620p over HDMI: worked out from the 1440p entries, not measured yet.  Lines = LCD lines
+                 * (437) x the 1440p LCD -> HDMI ratio; S_V so that lines x S_V keeps the 1440p product. */
+                case 6:  YUV_LV_Buf = 0x18E0520; YUV_LV_S_V = 0x10501DC; break; // CROP_1620p
                 default: YUV_LV_Buf = 0x1830520; YUV_LV_S_V = 0x6100AC;  break;
             }
         }
@@ -3255,6 +3266,7 @@ void SetAspectRatioCorrectionValues()
                 case 2:                                                         // CROP_3K
                          YUV_LV_Buf = 0x1580CA8; YUV_LV_S_V = 0x1050209; break;
                 case 3:  YUV_LV_Buf = 0x1C70CA8; YUV_LV_S_V = 0x105018A; break; // CROP_1440p
+                case 6:  YUV_LV_Buf = 0x1EB0CA8; YUV_LV_S_V = 0x1050183; break; // CROP_1620p (see 480p; not measured)
                 default: YUV_LV_Buf = 0x21B0CA8; YUV_LV_S_V = 0x8700AC;  break;
             }
         }
@@ -3267,6 +3279,7 @@ void SetAspectRatioCorrectionValues()
                 case 2:                                                         // CROP_3K
                          YUV_LV_Buf = 0x1180A50; YUV_LV_S_V = 0x1050280; break;
                 case 3:  YUV_LV_Buf = 0x1730A50; YUV_LV_S_V = 0x10501E3; break; // CROP_1440p
+                case 6:  YUV_LV_Buf = 0x1900A50; YUV_LV_S_V = 0x10501DB; break; // CROP_1620p (see 480p; not measured)
                 default: YUV_LV_Buf = 0x1B70A50; YUV_LV_S_V = 0x370056;  break;
             }
         }
