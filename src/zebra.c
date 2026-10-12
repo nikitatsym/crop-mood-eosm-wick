@@ -3415,7 +3415,7 @@ struct menu_entry zebra_menus[] = {
     #ifdef FEATURE_SPOTMETER
 #ifdef CONFIG_SLIM_MENUS
     {
-        .name = "Spotmeter",
+        .name = "Spot Meter",
         .priv           = &spotmeter_draw,
         .max = 1,
         .icon_type = IT_BOOL,
@@ -3467,7 +3467,7 @@ struct menu_entry zebra_menus[] = {
     #ifdef FEATURE_FALSE_COLOR
 #ifdef CONFIG_SLIM_MENUS
     {
-        .name = "False color",
+        .name = "False Color",
         .priv       = &falsecolor_draw,
         .max = 1,
         .icon_type = IT_BOOL,
