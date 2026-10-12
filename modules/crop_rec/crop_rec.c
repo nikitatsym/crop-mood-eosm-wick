@@ -129,7 +129,11 @@ CONFIG_INT("crop.more_hacks",       more_hacks, 1);
 static CONFIG_INT("crop.arrows_L_R",       Arrows_L_R, 2); /* Aperture */
 /* Settings version.  Keeps the old key name so existing config files keep their number
  * (the button conversions below must run only once).  See crop_settings_load(). */
-static CONFIG_INT("crop.button_map_v",     crop_settings_ver, 0);
+#define CROP_SETTINGS_VERSION 5
+/* A fresh install starts at the CURRENT version: the conversions in crop_settings_load() are for
+ * config files of older builds, and must not run over the defaults (they turned the default INFO
+ * button, Quick Panel, into OFF). */
+static CONFIG_INT("crop.button_map_v",     crop_settings_ver, CROP_SETTINGS_VERSION);
 
 enum crop_preset {
     CROP_PRESET_OFF = 0,
@@ -7754,8 +7758,6 @@ static unsigned int raw_info_update_cbr(unsigned int unused)
  * to change what a saved value MEANS, add a block to crop_settings_load() for the new
  * version and raise CROP_SETTINGS_VERSION.  Blocks run once per config file.
  */
-#define CROP_SETTINGS_VERSION 4
-
 static const struct setting_range crop_settings[] = {
     SETTING(crop_preset_index,          1,       3,      1),  /* slim: 1..3 (3x3 / 1x1 / 1x3) */
     SETTING(crop_preset_ar_menu,        0,       4,      4),
@@ -7772,7 +7774,7 @@ static const struct setting_range crop_settings[] = {
     SETTING(brighten_lv_method,         0,       1,      0),
     SETTING(fps_over,             -100000,  100000,      0),
     SETTING(SET_button,                 1,       2,      1),  /* slim: x10 zoom / last settings */
-    SETTING(INFO_button,                0,       6,      0),
+    SETTING(INFO_button,                0,       6,      6),  /* default: Quick Panel */
     SETTING(Shutter_rec,                0,       1,      0),
     SETTING(Arrows_U_D,                 0,       3,      3),
     SETTING(Shutter_zoom,               0,       2,      0),
@@ -7816,6 +7818,15 @@ static void crop_settings_load(void)
         INFO_button = 0;
     if (crop_settings_ver < 4)
         crop_settings_ver = 4;
+
+    /* version 5: the INFO button defaults to Quick Panel (6).  A config that still has it OFF
+     * (earlier builds had no default) gets Quick Panel once; OFF can be chosen again afterwards. */
+    if (crop_settings_ver < 5)
+    {
+        if (INFO_button == 0)
+            INFO_button = 6;
+        crop_settings_ver = 5;
+    }
 
     /* never lower the number (a config file touched by a newer build keeps its version) */
     if (crop_settings_ver < CROP_SETTINGS_VERSION)
