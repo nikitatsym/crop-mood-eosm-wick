@@ -6783,44 +6783,10 @@ static int lv_check_is_healthy(void)
     return 1;
 }
 
-/* HDMI full-screen "Fit": the picture is narrower than the line, and Canon only writes the picture
- * itself, so the strips beside it keep whatever an earlier mode left there (green / ghost image on
- * the first test).  Blank the outer part of those strips, in all three LiveView buffers.  The
- * picture never reaches the outer 100 px on the left or 60 px on the right (line = 1620 px, 3240 bytes). */
-static void slim_fit_clear_margins(void)
-{
-    static int last = 0;
-    /* EOS M 2.0.2 LiveView buffers (YUV422_LV_BUFFER_1..3 in platform/EOSM.202/consts.h; the register
-     * dump shows the first one in 0xC0F26208) */
-    static const uint32_t buf[3] = { 0x4F1D7800, 0x4F5E7800, 0x4F9F7800 };
-
-    if (!crop_rec_preview_fit() || !is_1080i_Full_Output() || !lv || RECORDING)
-        return;
-
-    int now = get_ms_clock();
-    if (now - last < 500)
-        return;
-    last = now;
-
-    for (int b = 0; b < 3; b++)
-    {
-        uint32_t * line = (uint32_t *) UNCACHEABLE(buf[b]);
-        for (int y = 0; y < 540; y++)
-        {
-            for (int x = 0; x < 100 / 2; x++)           /* left: 100 px  (2 px per 32-bit word) */
-                line[x] = 0x00800080;
-            for (int x = (1620 - 60) / 2; x < 1620 / 2; x++)   /* right: 60 px */
-                line[x] = 0x00800080;
-            line += 3240 / 4;
-        }
-    }
-}
-
 /* when closing ML menu, check whether we need to refresh the LiveView */
 static unsigned int crop_rec_polling_cbr(unsigned int unused)
 {
     slim_dump_regs_poll();
-    slim_fit_clear_margins();
 
     /* touch/Movie-tab shortcuts inject Q+SET into an open menu — not used on slim. */
 #ifndef CONFIG_SLIM_MENUS
