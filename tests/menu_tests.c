@@ -51,9 +51,11 @@ int main(void)
         }
 
     /* 2. a saved frame that belongs to another readout is repaired by sync */
-    set_state(7, 0);                       /* 1/2": frame 0 is 16:9 (2.5K) */
+    set_state(8, 0);                       /* 1/2.3": frame 0 is 16:9 (2.5K) */
     slim_mode_ui = 0; slim_1x1_ar = 3; slim_unified_preset = 0;     /* but the camera is on 1280p */
-    CHECK(slim_film_sync() == 7 && slim_film_frame_get(7) == 1, "1/2\" on 1280p must show its 4:3 frame");
+    CHECK(slim_film_sync() == 4, "1/2.3\" cannot use 1280p: the first format that can (S8)");
+    set_state(7, 1);                       /* 1/2": both frames are on 1280p, so the saved frame is kept */
+    CHECK(slim_film_sync() == 7 && slim_film_frame_get(7) == 1, "1/2\" 4:3 stays on 1280p");
 
     /* 3. leftover legacy modes are not film formats */
     slim_mode_ui = 0; slim_1x1_ar = 1; slim_unified_preset = 1;      /* 2.8K Higher */

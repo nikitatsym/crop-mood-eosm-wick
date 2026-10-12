@@ -124,15 +124,16 @@ int main(void)
         CHECK(film_pick(FILM_RO_1280, 7, 1, &fr) == 7 && fr == 1, "1/2\" 4:3 is kept on 1280p");
         CHECK(film_pick(FILM_RO_25K, 8, 1, &fr) == 8 && fr == 1, "1/2.3\" 4:3 is kept on 2.5K");
         /* a stored frame from another readout is repaired */
-        CHECK(film_pick(FILM_RO_1280, 7, 0, &fr) == 7 && fr == 1, "1/2\" on 1280p must be its 4:3 frame");
-        CHECK(film_pick(FILM_RO_25K, 7, 1, &fr) == 7 && fr == 0, "1/2\" on 2.5K must be its 16:9 frame");
+        CHECK(film_pick(FILM_RO_1280, 6, 0, &fr) == 4 && fr == 0, "2/3\" cannot use 1280p: first format that can (S8)");
+        CHECK(film_pick(FILM_RO_1280, 7, 0, &fr) == 7 && fr == 0, "1/2\" 16:9 is kept on 1280p");
+        CHECK(film_pick(FILM_RO_25K, 7, 1, &fr) == 8 && fr == 0, "1/2\" has no 2.5K frame: 2.5K -> 1/2.3\" 16:9");
         CHECK(film_pick(FILM_RO_1620, 6, 0, &fr) == 6 && fr == 1, "2/3\" on 1620p must be its 4:3 frame");
         CHECK(film_pick(FILM_RO_1440, 6, 1, &fr) == 6 && fr == 0, "2/3\" on 1440p must be its 16:9 frame");
         /* a format that cannot use the readout is replaced by the first one that can */
         CHECK(film_pick(FILM_RO_3K, 3, 0, &fr) == 2 && fr == 0, "3K from 16mm -> S16");
         CHECK(film_pick(FILM_RO_3K, 8, 0, &fr) == 2 && fr == 0, "3K from 1/2.3\" -> S16 (the only 3K format)");
         CHECK(film_pick(FILM_RO_1280, 2, 0, &fr) == 4 && fr == 0, "1280p from S16 -> S8");
-        CHECK(film_pick(FILM_RO_25K, 0, 0, &fr) == 7 && fr == 0, "2.5K from A35 -> 1/2\" 16:9");
+        CHECK(film_pick(FILM_RO_25K, 0, 0, &fr) == 8 && fr == 0, "2.5K from A35 -> 1/2.3\" 16:9");
         CHECK(film_pick(FILM_RO_1620, 0, 0, &fr) == 6 && fr == 1, "1620p from A35 -> 2/3\" 4:3");
         /* every frame of every format maps back to itself */
         for (int f = 0; f < FILM_FORMAT_COUNT; f++)

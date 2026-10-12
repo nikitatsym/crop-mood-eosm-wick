@@ -85,7 +85,8 @@ static const struct film_frame film_frames[FILM_FRAME_COUNT] __attribute__((unus
     { "2/3\" 16:9 Crop",    2032, 1144, "2/3\" sensor width (8.8 mm), cropped to 16:9",   "1:1 16:9 2560x1440",  "16:9 Crop",  FILM_RO_1440 },
     { "2/3\" 4:3",          2032, 1524, "2/3\" sensor (8.8 x 6.6 mm), 4:3",              "1:1 4:3 2160x1620",   "4:3", FILM_RO_1620 },
     /* 1/2" (6.4 x 4.8 mm) */
-    { "1/2\" 16:9 Crop",    1472,  828, "1/2\" sensor width (6.4 mm), cropped to 16:9",   "1:1 2.33:1 2520x1080", "16:9 Crop", FILM_RO_25K },
+    /* both 1/2" frames use the 1280p readout, so the 16:9 window is as wide as the 4:3 one on the screen (it was cut from 2.5K, which previews smaller) */
+    { "1/2\" 16:9 Crop",    1472,  828, "1/2\" sensor width (6.4 mm), cropped to 16:9",   "1:1 3:2 1920x1280",   "16:9 Crop", FILM_RO_1280 },
     { "1/2\" 4:3",          1472, 1104, "1/2\" sensor (6.4 x 4.8 mm), 4:3",              "1:1 3:2 1920x1280",   "4:3", FILM_RO_1280 },
     /* 1/2.3" (6.17 x 4.55 mm) */
     { "1/2.3\" 16:9 Crop",  1424,  800, "1/2.3\" sensor width (6.17 mm), cropped to 16:9", "1:1 2.33:1 2520x1080", "16:9 Crop", FILM_RO_25K },
