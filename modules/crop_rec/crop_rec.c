@@ -6799,6 +6799,12 @@ static int lv_check_is_healthy(void)
  * background task for the whole refresh. */
 static volatile int slim_cover_on = 0;
 static volatile int slim_cover_task_alive = 0;
+static volatile int slim_cover_claimed = 0;     /* the refresh code has taken over the cover */
+static volatile int slim_cover_t0 = 0;
+
+/* A cover started by the menu-close watcher (not by the refresh code) gives up after this long:
+ * enough for Canon's own x5 / x1 / arrows resume steps, never a stuck black screen. */
+#define SLIM_COVER_UNCLAIMED_MS 1600
 
 static void slim_cover_black(void)
 {
@@ -6810,22 +6816,47 @@ static void slim_cover_task(void *unused)
     /* Hold ML's overlay lock for the whole cover so ML's own bars and info text cannot draw between
      * the black fills (that showed as flicker).  Canon's own drawing does not use this lock, so the
      * black is still refilled over it. */
-    int t0 = get_ms_clock();
     AcquireRecursiveLock(bmp_lock, 0);
-    while (slim_cover_on && lv && !gui_menu_shown() && !RECORDING && get_ms_clock() - t0 < SLIM_COVER_MAX_MS)
+    while (slim_cover_on && lv && !gui_menu_shown() && !RECORDING)
     {
+        int dt = get_ms_clock() - slim_cover_t0;
+        if (dt > SLIM_COVER_MAX_MS) break;
+        if (!slim_cover_claimed && dt > SLIM_COVER_UNCLAIMED_MS) break;
         bmp_fill(COLOR_BLACK, BMP_W_MINUS, BMP_H_MINUS, BMP_TOTAL_WIDTH, BMP_TOTAL_HEIGHT);
         msleep(20);
     }
     ReleaseRecursiveLock(bmp_lock);
+    slim_cover_on = 0;
+
+    /* Lift the black WITHOUT redraw(): redraw() repaints Canon's own dialog, which brings Canon's
+     * x5 arrows back for a couple of frames.  Clear the overlay and ask ML to redraw its own
+     * things (film framing, info text, AF frame) instead.  If the framing is somehow missing,
+     * mlv_lite's own safety net still does a full redraw a moment later. */
+    if (lv && !gui_menu_shown())
+    {
+        BMP_LOCK( clrscr(); )
+        afframe_set_dirty();
+        crop_set_dirty(10);
+        menu_set_dirty();
+        lens_display_set_dirty();
+    }
+    slim_cover_claimed = 0;
     slim_cover_task_alive = 0;
 }
 
-static void slim_cover_start(void)
+/* claim = 1: called by the refresh code, which will end the cover itself */
+static void slim_cover_start(int claim)
 {
+    if (claim)
+    {
+        slim_cover_claimed = 1;
+        slim_cover_t0 = get_ms_clock();
+    }
     slim_cover_black();
     if (slim_cover_task_alive)
         return;
+    if (!claim)
+        slim_cover_t0 = get_ms_clock();
     slim_cover_on = 1;
     slim_cover_task_alive = 1;
     task_create("slim_cover", 0x1c, 0x1000, slim_cover_task, (void*)0);
@@ -6840,16 +6871,30 @@ static void slim_cover_hold_and_release(void)
     int n = 0;
     while (slim_cover_task_alive && n++ < 50)
         msleep(20);
+}
 
-    /* Lift the black WITHOUT redraw(): redraw() repaints Canon's own dialog, which brings Canon's
-     * x5 arrows back for a couple of frames.  Clear the overlay and ask ML to redraw its own
-     * things (film framing, info text, AF frame) instead.  If the framing is somehow missing,
-     * mlv_lite's own safety net still does a full redraw a moment later. */
-    BMP_LOCK( clrscr(); )
-    afframe_set_dirty();
-    crop_set_dirty(10);
-    menu_set_dirty();
-    lens_display_set_dirty();
+/* Canon's own Live View resume after a menu (x5, x1, x5 with arrows) happens right after the menu
+ * closes, before the polling task gets to look.  This small watcher covers the screen the moment a
+ * menu closes after a change, so those steps are hidden too. */
+static void slim_cover_watch_task(void *unused)
+{
+    int was_shown = 0;
+    int film_at_open = 0;
+
+    while (1)
+    {
+        msleep(20);
+        int shown = lv && gui_menu_shown();
+        if (shown && !was_shown)
+            film_at_open = slim_film_active();
+        else if (!shown && was_shown && lv && !RECORDING && is_movie_mode() && CROP_PRESET_MENU)
+        {
+            if (check_if_settings_changed() || crop_rec_needs_lv_refresh() ||
+                slim_film_active() != film_at_open)
+                slim_cover_start(0);
+        }
+        was_shown = shown;
+    }
 }
 
 /* when closing ML menu, check whether we need to refresh the LiveView */
@@ -6980,7 +7025,7 @@ static unsigned int crop_rec_polling_cbr(unsigned int unused)
                 /* CheckPreviewRegsValuesAndForce is intentionally a no-op
                  * on EOS M, so avoid an unnecessary delayed polling wait. */
 #else
-                slim_cover_start();     /* hide the refresh steps (see slim_cover_hold_and_release) */
+                slim_cover_start(1);    /* hide the refresh steps (see slim_cover_hold_and_release) */
                 wait_lv_frames(2);
                 if (crop_rec_needs_lv_refresh())
                 {
@@ -7907,6 +7952,8 @@ static void crop_settings_load(void)
 
 static unsigned int crop_rec_init()
 {
+    task_create("slim_cover_watch", 0x1d, 0x1000, slim_cover_watch_task, (void*)0);
+
     //Will place afframe so that 2_1 HFR presets will work at least after restart
     if (!is_manual_focus())
     {
