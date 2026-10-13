@@ -501,7 +501,14 @@ void idle_powersave_step()
             }
             else
             {
-                if (canon_gui_front_buffer_disabled() && (int)(get_ms_clock() - kill_flicker_hold_until) >= 0)
+                if ((int)(get_ms_clock() - kill_flicker_hold_until) < 0)
+                {
+                    /* inside the hold after a menu: if Canon switched its overlay back on and drew
+                     * the x5 arrows / magnification box, kill it again (this runs at 10 Hz) */
+                    if (!canon_gui_front_buffer_disabled())
+                        idle_kill_flicker();
+                }
+                else if (canon_gui_front_buffer_disabled())
                     idle_stop_killing_flicker();
             }
             static int prev_idle = 0;
