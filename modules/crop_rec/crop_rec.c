@@ -6791,6 +6791,10 @@ static int lv_check_is_healthy(void)
  * black for that time (and a moment after, while Canon finishes drawing its x5 screen), so the menu
  * goes straight to the proper framing.  ML then repaints everything with redraw().  Never while
  * recording: the refresh does not run then. */
+/* core (powersave.c): keep Canon's overlay (x5 arrows) off, and not let the idle logic turn it back
+ * on for a while.  Re-armed around the refresh below so the hold cannot run out in the middle of it. */
+extern void idle_kill_flicker_after_menu();
+
 #define SLIM_COVER_HOLD_MS  600
 #define SLIM_FILM_COVER_MS  1300    /* Canon's own resume steps take about 1.4 s after the menu closes */
 #define SLIM_COVER_MAX_MS   4000    /* safety: the overlay lock is never held longer than this */
@@ -7006,6 +7010,7 @@ static unsigned int crop_rec_polling_cbr(unsigned int unused)
                  * on EOS M, so avoid an unnecessary delayed polling wait. */
 #else
                 slim_film_cover_pending = 0;    /* this refresh covers it */
+                idle_kill_flicker_after_menu();
                 slim_cover_start();     /* hide the refresh steps (see slim_cover_hold_and_release) */
                 wait_lv_frames(2);
                 if (crop_rec_needs_lv_refresh())
@@ -7018,6 +7023,7 @@ static unsigned int crop_rec_polling_cbr(unsigned int unused)
                     gui_uilock(UILOCK_NONE);
                     info_led_off();
                 }
+                idle_kill_flicker_after_menu();     /* Canon settles after the zoom steps: hold again */
                 slim_cover_hold_and_release(SLIM_COVER_HOLD_MS);
 #endif
             }
@@ -7034,6 +7040,7 @@ static unsigned int crop_rec_polling_cbr(unsigned int unused)
     {
         /* film format changed but no refresh was needed: still hide Canon's own resume steps */
         slim_film_cover_pending = 0;
+        idle_kill_flicker_after_menu();
         slim_cover_start();
         slim_cover_hold_and_release(SLIM_FILM_COVER_MS);
     }
