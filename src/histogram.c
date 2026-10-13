@@ -170,7 +170,7 @@ static void hist_draw_shadow_meter(uint8_t *bvram, unsigned x_origin,
     /* Clear the old length first, then draw the current centered solid bar. */
     for (int row = 0; row < 2 * scale; row++)
         for (int x = 0; x < hist_width; x++)
-            bvram[x_origin + x + (y + row) * BMPPITCH] = COLOR_BG;
+            bvram[x_origin + x + (y + row) * BMPPITCH] = COLOR_ALMOST_BLACK;
     for (int row = 0; row < 2 * scale; row++)
         for (int x = (hist_width - width) / 2;
              x < (hist_width + width) / 2; x++)
@@ -605,7 +605,7 @@ void hist_draw_image(
         for( y=graph_height ; y>0 ; y-- , col += BMPPITCH )
         {
             int pixel = histogram.is_rgb ? hist_rgb_color(y, sizeR, sizeG, sizeB) :
-                y > size ? COLOR_BG :
+                y > size ? COLOR_ALMOST_BLACK :   /* opaque: COLOR_BG let the live-view picture show through */
 #if defined(FEATURE_FALSE_COLOR)
                                              falsecolor_fordraw(((i << 8) / HIST_WIDTH) & 0xFF);
 #else

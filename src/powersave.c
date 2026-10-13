@@ -418,6 +418,24 @@ void idle_kill_flicker()
         }
     }
 }
+/* Right after an ML menu closes, Canon's overlay layer is switched back on and only switched off
+ * again once Live View is idle (a second or so later).  In x5 movie presets Canon draws its
+ * zoom arrows in that window.  Switch it off straight away, and do not let the "not idle yet"
+ * logic below switch it back on for a short while.  Same state the idle logic reaches anyway. */
+#define KILL_FLICKER_HOLD_MS 1500
+static volatile int kill_flicker_hold_until = 0;
+
+void idle_kill_flicker_after_menu()
+{
+    extern int kill_canon_gui_mode;
+    if (kill_canon_gui_mode != 1 || !lv || !is_movie_mode() || lv_disp_mode != 0 || RECORDING)
+        return;
+    if (!(get_global_draw_setting() & 1))
+        return;
+    kill_flicker_hold_until = get_ms_clock() + KILL_FLICKER_HOLD_MS;
+    idle_kill_flicker();
+}
+
 static void idle_stop_killing_flicker()
 {
     if (canon_gui_front_buffer_disabled())
@@ -483,7 +501,14 @@ void idle_powersave_step()
             }
             else
             {
-                if (canon_gui_front_buffer_disabled())
+                if ((int)(get_ms_clock() - kill_flicker_hold_until) < 0)
+                {
+                    /* inside the hold after a menu: if Canon switched its overlay back on and drew
+                     * the x5 arrows / magnification box, kill it again (this runs at 10 Hz) */
+                    if (!canon_gui_front_buffer_disabled())
+                        idle_kill_flicker();
+                }
+                else if (canon_gui_front_buffer_disabled())
                     idle_stop_killing_flicker();
             }
             static int prev_idle = 0;

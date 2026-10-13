@@ -24,6 +24,7 @@
 
 #include "dryos.h"
 #include "lens.h"
+#include "iso-gain.h"
 #include "property.h"
 #include "bmp.h"
 #include "config.h"
@@ -2805,6 +2806,30 @@ static LVINFO_UPDATE_FUNC(av_update)
 #endif
 }
 
+/* crop_rec: the active recording format is one of the FILM standard formats */
+static int (*crop_rec_film_standard)() = MODULE_FUNCTION(crop_rec_film_standard);
+
+int shutter_angle_display()
+{
+    return is_movie_mode() && crop_rec_film_standard && crop_rec_film_standard();
+}
+
+/* crop_rec: the active recording format is one of the VIDEO standard formats */
+static int (*crop_rec_video_standard)() = MODULE_FUNCTION(crop_rec_video_standard);
+
+int gain_display()
+{
+    return is_movie_mode() && crop_rec_video_standard && crop_rec_video_standard();
+}
+
+int current_shutter_angle()
+{
+    int s = get_current_shutter_reciprocal_x1000();
+    if (s <= 0) return 0;
+    int deg = 3600 * fps_get_current_x1000() / s;
+    return (deg + 5) / 10;
+}
+
 static LVINFO_UPDATE_FUNC(tv_update)
 {
     LVINFO_BUFFER(16);
@@ -2812,6 +2837,11 @@ static LVINFO_UPDATE_FUNC(tv_update)
     if (is_bulb_mode())
     {
         snprintf(buffer, sizeof(buffer), "BULB");
+    }
+    else if (shutter_angle_display())
+    {
+        /* FILM standard: shutter angle, e.g. 180° */
+        snprintf(buffer, sizeof(buffer), "%d"SYM_DEGREE, current_shutter_angle());
     }
     else if (is_movie_mode())
     {
@@ -2856,7 +2886,9 @@ static LVINFO_UPDATE_FUNC(iso_update)
     }
     else if (is_movie_mode())
     {
-        snprintf(buffer, sizeof(buffer), SYM_ISO);
+        /* VIDEO standard: Gain in dB instead of ISO (no ISO symbol) */
+        int gain_mode = gain_display();
+        snprintf(buffer, sizeof(buffer), "%s", gain_mode ? "" : SYM_ISO);
         
         if (!lens_info.raw_iso)
         {
@@ -2903,7 +2935,14 @@ static LVINFO_UPDATE_FUNC(iso_update)
             item->color_fg = COLOR_ORANGE;
         }
         
-        STR_APPEND(buffer, "%d", iso);
+        if (gain_mode)
+        {
+            char gain[16];
+            iso_gain_text(gain, sizeof(gain), iso_equiv_raw, 0);
+            STR_APPEND(buffer, "%s", gain);
+        }
+        else
+            STR_APPEND(buffer, "%d", iso);
     }
     else /* photo mode */
     {

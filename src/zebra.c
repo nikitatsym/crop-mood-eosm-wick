@@ -3246,6 +3246,297 @@ struct menu_entry zebra_menus[] = {
     },
 #endif
     #endif
+
+    #ifdef FEATURE_FOCUS_PEAK_DISP_FILTER
+        #ifndef FEATURE_FOCUS_PEAK
+        #error This requires FEATURE_FOCUS_PEAK.
+        #endif
+    #endif
+
+#ifdef FEATURE_FOCUS_PEAK
+#ifdef CONFIG_SLIM_MENUS
+    {
+        .name = "Focus Assist",
+        .priv           = &focus_assist_mode,
+        .select         = slim_focus_assist_select,
+        .min            = 0,
+        .max            = FOCUS_ASSIST_EDGE_DETECT,
+        .icon_type = IT_DICE,
+        .choices = CHOICES("OFF", "Sharper Image", "Edge Detect"),
+        .edit_mode = EM_INLINE_ADJUST,
+        .help = "DIGIC preview assistance; does not affect the recording.",
+        .help2 = "Sharper Image is subtle; Edge Detect is monochrome.",
+        .depends_on = DEP_LIVEVIEW,
+    },
+#else
+    {
+        .name = "Focus Peak",
+        .priv           = &focus_peaking,
+        .update         = focus_peaking_display,
+        .max = 1,
+        .help = "Show which parts of the image are in focus.",
+        .submenu_width = 650,
+        .depends_on = DEP_GLOBAL_DRAW,
+        .children =  (struct menu_entry[]) {
+            {
+                .name = "Filter bias", 
+                .priv = &focus_peaking_filter_edges,
+                .max = 2,
+                .choices = (const char *[]) {"Strong edges", "Balanced", "Fine details"},
+                .help  = "Fine-tune the focus detection algorithm:",
+                .help2 = "Strong edges: looks for edges, works best in low light.\n"
+                         "Balanced: tries to cover both strong edges and fine details.\n"
+                         "Fine details: looks for microcontrast. Needs lots of light.\n",
+                .icon_type = IT_DICE
+            },
+            /*
+            {
+                .name = "Method",
+                .priv = &focus_peaking_method, 
+                .max = 1,
+                .choices = (const char *[]) {"1st deriv.", "2nd deriv.", "Nyquist H"},
+                .help = "Contrast detection method. 2: more accurate, 1: less noisy.",
+            },*/
+            #ifdef FEATURE_FOCUS_PEAK_DISP_FILTER
+                #ifndef CONFIG_DISPLAY_FILTERS
+                #error This requires CONFIG_DISPLAY_FILTERS.
+                #endif
+            {
+                .name = "Display type",
+                .priv = &focus_peaking_disp, 
+                .max = 4,
+                .choices = (const char *[]) {"Blinking dots", "Fine dots", "Alpha blend", "Sharpness", "Raw"},
+                .help = "How to display peaking. Alpha looks nicer, but image lags.",
+            },
+            #endif
+            {
+                .name = "Threshold", 
+                .priv = &focus_peaking_pthr,
+                .select = focus_peaking_adjust_thr,
+                .max    = 50,
+                .icon_type = IT_PERCENT_LOG,
+                .unit = UNIT_PERCENT_x10,
+                .help = "How many pixels are considered in focus (percentage).",
+            },
+            {
+                .name = "Color", 
+                .priv = &focus_peaking_color,
+                .max = 7,
+                .choices = (const char *[]) {"Red", "Green", "Blue", "Cyan", "Magenta", "Yellow", "Global Focus", "Local Focus"},
+                .help = "Focus peaking color (fixed or color coding).",
+                .icon_type = IT_DICE,
+            },
+            {
+                .name = "Grayscale image", 
+                .priv = &focus_peaking_grayscale,
+                .max = 1,
+                .help = "Display LiveView image in grayscale.",
+            },
+            MENU_EOL
+        },
+    },
+#endif
+    #endif
+    #ifdef FEATURE_HISTOGRAM
+#ifdef CONFIG_SLIM_MENUS
+    {
+        .name = "Histogram",
+        .priv       = &hist_draw,
+        .max = MONITOR_PERFORMANCE,
+        .icon_type = IT_DICE,
+        .choices = CHOICES("OFF", "ON"),
+        .update     = monitoring_mode_display,
+        .edit_mode = EM_INLINE_ADJUST,
+        .help = "RAW luma histogram on a linear scale.",
+        .help2 = "Off: disabled. On: performance refresh.",
+    },
+#else
+    {
+        .name = "Histogram",
+        .priv       = &hist_draw,
+        .max = 1,
+        .update = hist_print,
+        .help = "Exposure aid: shows the distribution of brightness levels.",
+        .depends_on = DEP_GLOBAL_DRAW | DEP_EXPSIM,
+        .submenu_width = 700,
+        .children =  (struct menu_entry[]) {
+            {
+                .name = "Histogram type",
+                .priv = &hist_type,
+                .update = raw_histo_update,
+                #ifdef FEATURE_RAW_HISTOGRAM
+                .max = 3,
+#else
+                .max = 1,
+                #endif
+                .choices = (const char *[]) {
+                    "YUV-based, Luma",
+                    "YUV-based, RGB",
+                    "RAW-based (RGB)",
+                    "RAW HistoBar (MAX)",
+                },
+                .icon_type = IT_DICE,
+                .help  = "Choose between YUV-based (JPG) or RAW-based histogram.",
+                .help2 = "If RAW data is not available, it will fall back to YUV-based.",
+            },
+            #ifdef FEATURE_RAW_HISTOGRAM
+            {
+                .name = "RAW EV indicator",
+                .priv = &hist_meter,
+                .max = 2,
+                .choices = CHOICES("OFF", "Dynamic Range", "ETTR hint"),
+                .help = "Choose an EV image indicator to display on the histogram.",
+                .help2 = 
+                    " \n"
+                    "Display the dynamic range at current ISO, from noise stdev.\n"
+                    "Show how many stops you can push the exposure to the right.\n"
+            },
+            #endif
+            {
+                .name = "Scaling",
+                .priv = &hist_log, 
+                .max = 1,
+                .choices = (const char *[]) {"Linear", "Log"},
+                .help = "Linear or logarithmic histogram.",
+                .icon_type = IT_DICE,
+            },
+            {
+                .name = "Clip warning",
+                .priv = &hist_warn, 
+                .max = 1,
+                .help = "Display warning dots when one color channel is clipped.",
+                .help2 = "Numbers represent the percentage of pixels clipped.",
+            },
+            MENU_EOL
+        },
+    },
+#endif
+    #endif
+    #ifdef FEATURE_SPOTMETER
+#ifdef CONFIG_SLIM_MENUS
+    {
+        .name = "Spot Meter",
+        .priv           = &spotmeter_draw,
+        .max = 1,
+        .icon_type = IT_BOOL,
+        .choices = CHOICES("OFF", "ON"),
+        .edit_mode = EM_INLINE_ADJUST,
+        .help = "Exposure aid: display brightness from a small spot.",
+        .help2 = "Dial L/R toggles ON/OFF.",
+    },
+#else
+    {
+        .name = "Spotmeter",
+        .priv           = &spotmeter_draw,
+        .max = 1,
+        .update        = spotmeter_menu_display,
+        .help = "Exposure aid: display brightness from a small spot.",
+        .depends_on = DEP_GLOBAL_DRAW | DEP_EXPSIM,
+        .children =  (struct menu_entry[]) {
+            {
+                .name = "Spotmeter Unit",
+                .priv = &spotmeter_formula, 
+                #ifdef FEATURE_RAW_SPOTMETER
+                .max = 4,
+#else
+                .max = 3,
+                #endif
+                .choices = (const char *[]) {"Percent", "0..255", "RGB (HTML)", "RAW (EV)", "RGB (Percent)"},
+                .icon_type = IT_DICE,
+                .help = "Measurement unit for brightness level(s).",
+                .help2 =
+                    "Percentage of overall brightness level.\n"
+                    "8 bit RGB level.\n"
+                    "HTML like color codes.\n"
+                    "Negative value from clipping, in EV (RAW).\n"
+                    "RGB color in Percentage.\n"
+            },
+            {
+                .name = "Spot Position",
+                .priv = &spotmeter_position, 
+                .max = 1,
+                .choices = (const char *[]) {"Center", "Focus box"},
+                .icon_type = IT_DICE,
+                .help = "Spotmeter position: center or linked to focus box.",
+            },
+            MENU_EOL
+        }
+    },
+#endif
+    #endif
+    #ifdef FEATURE_FALSE_COLOR
+#ifdef CONFIG_SLIM_MENUS
+    {
+        .name = "False Color",
+        .priv       = &falsecolor_draw,
+        .max = 1,
+        .icon_type = IT_BOOL,
+        .choices = CHOICES("OFF", "ON"),
+        .edit_mode = EM_INLINE_ADJUST,
+        .help = "Exposure aid: each brightness level is color-coded.",
+        .help2 = "Dial L/R toggles ON/OFF.",
+    },
+#else
+    {
+        .name = "False color",
+        .priv       = &falsecolor_draw,
+        .update     = falsecolor_display,
+        .max = 1,
+        .submenu_width = 700,
+        .submenu_height = 160,
+        .help = "Exposure aid: each brightness level is color-coded.",
+        .depends_on = DEP_GLOBAL_DRAW | DEP_EXPSIM,
+        .children =  (struct menu_entry[]) {
+            {
+                .name = "Palette      ",
+                .priv = &falsecolor_palette,
+                .max = 5,
+                .icon_type = IT_DICE,
+                .choices = CHOICES("Marshall", "SmallHD", "50-55%", "67-72%", "Banding detection", "GreenScreen"),
+                .update = falsecolor_display_palette,
+                .help = "False color palettes for exposure, banding, green screen...",
+            },
+            MENU_EOL
+        }
+    },
+#endif
+    #endif
+    #ifdef FEATURE_WAVEFORM
+#ifdef CONFIG_SLIM_MENUS
+    {
+        .name = "Waveform",
+        .priv       = &waveform_draw,
+        .max = MONITOR_PERFORMANCE,
+        .icon_type = IT_DICE,
+        .choices = CHOICES("OFF", "ON"),
+        .update     = monitoring_mode_display,
+        .edit_mode = EM_INLINE_ADJUST,
+        .help = "RAW luma waveform (same scale as histogram).",
+        .help2 = "Off: disabled. On: performance refresh.",
+    },
+#else
+    {
+        .name = "Waveform",
+        .priv       = &waveform_draw,
+        .update = waveform_print,
+        .max = 1,
+        .help = "Exposure aid: useful for checking overall brightness.",
+        .depends_on = DEP_GLOBAL_DRAW | DEP_EXPSIM,
+        .children =  (struct menu_entry[]) {
+            {
+                .name = "Waveform Size",
+                .priv = &waveform_size, 
+                .max = 2,
+                .choices = (const char *[]) {"Small", "Large", "FullScreen"},
+                .icon_type = IT_SIZE,
+                .help = "Waveform size: Small / Large / FullScreen.",
+            },
+            MENU_EOL
+        },
+        //.essential = FOR_LIVEVIEW | FOR_PLAYBACK,
+    },
+#endif
+    #endif
     #ifdef FEATURE_ZEBRA
 #ifdef CONFIG_SLIM_MENUS
     {
@@ -3331,28 +3622,14 @@ struct menu_entry zebra_menus[] = {
     },
 #endif
     #endif
-
-    #ifdef FEATURE_FOCUS_PEAK_DISP_FILTER
-        #ifndef FEATURE_FOCUS_PEAK
-        #error This requires FEATURE_FOCUS_PEAK.
-        #endif
+    #ifdef FEATURE_CROPMARKS
+    MENU_PLACEHOLDER("Cropmarks"),
     #endif
-
-#ifdef FEATURE_FOCUS_PEAK
+    #ifdef CONFIG_SLIM_MENUS
+    MENU_PLACEHOLDER("B&W Preview"),
+    #endif
+    #ifdef FEATURE_FOCUS_PEAK
 #ifdef CONFIG_SLIM_MENUS
-    {
-        .name = "Focus Assist",
-        .priv           = &focus_assist_mode,
-        .select         = slim_focus_assist_select,
-        .min            = 0,
-        .max            = FOCUS_ASSIST_EDGE_DETECT,
-        .icon_type = IT_DICE,
-        .choices = CHOICES("OFF", "Sharper Image", "Edge Detect"),
-        .edit_mode = EM_INLINE_ADJUST,
-        .help = "DIGIC preview assistance; does not affect the recording.",
-        .help2 = "Sharper Image is subtle; Edge Detect is monochrome.",
-        .depends_on = DEP_LIVEVIEW,
-    },
     {
         .name = "LUT Preview",
         .priv = &lut_preview,
@@ -3367,73 +3644,6 @@ struct menu_entry zebra_menus[] = {
         .help = "Preview-only 3D LUT. Recorded RAW/MLV stays unchanged.",
         .help2 = "Copy up to 5 named standard .cube LUTs to ML/LUTS and select with Left/Right.",
         .depends_on = DEP_LIVEVIEW,
-    },
-#else
-    {
-        .name = "Focus Peak",
-        .priv           = &focus_peaking,
-        .update         = focus_peaking_display,
-        .max = 1,
-        .help = "Show which parts of the image are in focus.",
-        .submenu_width = 650,
-        .depends_on = DEP_GLOBAL_DRAW,
-        .children =  (struct menu_entry[]) {
-            {
-                .name = "Filter bias", 
-                .priv = &focus_peaking_filter_edges,
-                .max = 2,
-                .choices = (const char *[]) {"Strong edges", "Balanced", "Fine details"},
-                .help  = "Fine-tune the focus detection algorithm:",
-                .help2 = "Strong edges: looks for edges, works best in low light.\n"
-                         "Balanced: tries to cover both strong edges and fine details.\n"
-                         "Fine details: looks for microcontrast. Needs lots of light.\n",
-                .icon_type = IT_DICE
-            },
-            /*
-            {
-                .name = "Method",
-                .priv = &focus_peaking_method, 
-                .max = 1,
-                .choices = (const char *[]) {"1st deriv.", "2nd deriv.", "Nyquist H"},
-                .help = "Contrast detection method. 2: more accurate, 1: less noisy.",
-            },*/
-            #ifdef FEATURE_FOCUS_PEAK_DISP_FILTER
-                #ifndef CONFIG_DISPLAY_FILTERS
-                #error This requires CONFIG_DISPLAY_FILTERS.
-                #endif
-            {
-                .name = "Display type",
-                .priv = &focus_peaking_disp, 
-                .max = 4,
-                .choices = (const char *[]) {"Blinking dots", "Fine dots", "Alpha blend", "Sharpness", "Raw"},
-                .help = "How to display peaking. Alpha looks nicer, but image lags.",
-            },
-            #endif
-            {
-                .name = "Threshold", 
-                .priv = &focus_peaking_pthr,
-                .select = focus_peaking_adjust_thr,
-                .max    = 50,
-                .icon_type = IT_PERCENT_LOG,
-                .unit = UNIT_PERCENT_x10,
-                .help = "How many pixels are considered in focus (percentage).",
-            },
-            {
-                .name = "Color", 
-                .priv = &focus_peaking_color,
-                .max = 7,
-                .choices = (const char *[]) {"Red", "Green", "Blue", "Cyan", "Magenta", "Yellow", "Global Focus", "Local Focus"},
-                .help = "Focus peaking color (fixed or color coding).",
-                .icon_type = IT_DICE,
-            },
-            {
-                .name = "Grayscale image", 
-                .priv = &focus_peaking_grayscale,
-                .max = 1,
-                .help = "Display LiveView image in grayscale.",
-            },
-            MENU_EOL
-        },
     },
 #endif
     #endif
@@ -3513,9 +3723,6 @@ struct menu_entry zebra_menus[] = {
     },
 #endif
     #endif
-    #ifdef FEATURE_CROPMARKS
-    MENU_PLACEHOLDER("Cropmarks"),
-    #endif
     #ifdef FEATURE_GHOST_IMAGE
         #ifndef FEATURE_CROPMARKS
         #error This requires FEATURE_CROPMARKS.
@@ -3550,206 +3757,6 @@ struct menu_entry zebra_menus[] = {
             },
             MENU_EOL
         }
-    },
-#endif
-    #endif
-    #ifdef FEATURE_SPOTMETER
-#ifdef CONFIG_SLIM_MENUS
-    {
-        .name = "Spotmeter",
-        .priv           = &spotmeter_draw,
-        .max = 1,
-        .icon_type = IT_BOOL,
-        .choices = CHOICES("OFF", "ON"),
-        .edit_mode = EM_INLINE_ADJUST,
-        .help = "Exposure aid: display brightness from a small spot.",
-        .help2 = "Dial L/R toggles ON/OFF.",
-    },
-#else
-    {
-        .name = "Spotmeter",
-        .priv           = &spotmeter_draw,
-        .max = 1,
-        .update        = spotmeter_menu_display,
-        .help = "Exposure aid: display brightness from a small spot.",
-        .depends_on = DEP_GLOBAL_DRAW | DEP_EXPSIM,
-        .children =  (struct menu_entry[]) {
-            {
-                .name = "Spotmeter Unit",
-                .priv = &spotmeter_formula, 
-                #ifdef FEATURE_RAW_SPOTMETER
-                .max = 4,
-#else
-                .max = 3,
-                #endif
-                .choices = (const char *[]) {"Percent", "0..255", "RGB (HTML)", "RAW (EV)", "RGB (Percent)"},
-                .icon_type = IT_DICE,
-                .help = "Measurement unit for brightness level(s).",
-                .help2 =
-                    "Percentage of overall brightness level.\n"
-                    "8 bit RGB level.\n"
-                    "HTML like color codes.\n"
-                    "Negative value from clipping, in EV (RAW).\n"
-                    "RGB color in Percentage.\n"
-            },
-            {
-                .name = "Spot Position",
-                .priv = &spotmeter_position, 
-                .max = 1,
-                .choices = (const char *[]) {"Center", "Focus box"},
-                .icon_type = IT_DICE,
-                .help = "Spotmeter position: center or linked to focus box.",
-            },
-            MENU_EOL
-        }
-    },
-#endif
-    #endif
-    #ifdef FEATURE_FALSE_COLOR
-#ifdef CONFIG_SLIM_MENUS
-    {
-        .name = "False color",
-        .priv       = &falsecolor_draw,
-        .max = 1,
-        .icon_type = IT_BOOL,
-        .choices = CHOICES("OFF", "ON"),
-        .edit_mode = EM_INLINE_ADJUST,
-        .help = "Exposure aid: each brightness level is color-coded.",
-        .help2 = "Dial L/R toggles ON/OFF.",
-    },
-#else
-    {
-        .name = "False color",
-        .priv       = &falsecolor_draw,
-        .update     = falsecolor_display,
-        .max = 1,
-        .submenu_width = 700,
-        .submenu_height = 160,
-        .help = "Exposure aid: each brightness level is color-coded.",
-        .depends_on = DEP_GLOBAL_DRAW | DEP_EXPSIM,
-        .children =  (struct menu_entry[]) {
-            {
-                .name = "Palette      ",
-                .priv = &falsecolor_palette,
-                .max = 5,
-                .icon_type = IT_DICE,
-                .choices = CHOICES("Marshall", "SmallHD", "50-55%", "67-72%", "Banding detection", "GreenScreen"),
-                .update = falsecolor_display_palette,
-                .help = "False color palettes for exposure, banding, green screen...",
-            },
-            MENU_EOL
-        }
-    },
-#endif
-    #endif
-    #ifdef FEATURE_HISTOGRAM
-#ifdef CONFIG_SLIM_MENUS
-    {
-        .name = "Histogram",
-        .priv       = &hist_draw,
-        .max = MONITOR_PERFORMANCE,
-        .icon_type = IT_DICE,
-        .choices = CHOICES("OFF", "ON"),
-        .update     = monitoring_mode_display,
-        .edit_mode = EM_INLINE_ADJUST,
-        .help = "RAW luma histogram on a linear scale.",
-        .help2 = "Off: disabled. On: performance refresh.",
-    },
-#else
-    {
-        .name = "Histogram",
-        .priv       = &hist_draw,
-        .max = 1,
-        .update = hist_print,
-        .help = "Exposure aid: shows the distribution of brightness levels.",
-        .depends_on = DEP_GLOBAL_DRAW | DEP_EXPSIM,
-        .submenu_width = 700,
-        .children =  (struct menu_entry[]) {
-            {
-                .name = "Histogram type",
-                .priv = &hist_type,
-                .update = raw_histo_update,
-                #ifdef FEATURE_RAW_HISTOGRAM
-                .max = 3,
-#else
-                .max = 1,
-                #endif
-                .choices = (const char *[]) {
-                    "YUV-based, Luma",
-                    "YUV-based, RGB",
-                    "RAW-based (RGB)",
-                    "RAW HistoBar (MAX)",
-                },
-                .icon_type = IT_DICE,
-                .help  = "Choose between YUV-based (JPG) or RAW-based histogram.",
-                .help2 = "If RAW data is not available, it will fall back to YUV-based.",
-            },
-            #ifdef FEATURE_RAW_HISTOGRAM
-            {
-                .name = "RAW EV indicator",
-                .priv = &hist_meter,
-                .max = 2,
-                .choices = CHOICES("OFF", "Dynamic Range", "ETTR hint"),
-                .help = "Choose an EV image indicator to display on the histogram.",
-                .help2 = 
-                    " \n"
-                    "Display the dynamic range at current ISO, from noise stdev.\n"
-                    "Show how many stops you can push the exposure to the right.\n"
-            },
-            #endif
-            {
-                .name = "Scaling",
-                .priv = &hist_log, 
-                .max = 1,
-                .choices = (const char *[]) {"Linear", "Log"},
-                .help = "Linear or logarithmic histogram.",
-                .icon_type = IT_DICE,
-            },
-            {
-                .name = "Clip warning",
-                .priv = &hist_warn, 
-                .max = 1,
-                .help = "Display warning dots when one color channel is clipped.",
-                .help2 = "Numbers represent the percentage of pixels clipped.",
-            },
-            MENU_EOL
-        },
-    },
-#endif
-    #endif
-    #ifdef FEATURE_WAVEFORM
-#ifdef CONFIG_SLIM_MENUS
-    {
-        .name = "Waveform",
-        .priv       = &waveform_draw,
-        .max = MONITOR_PERFORMANCE,
-        .icon_type = IT_DICE,
-        .choices = CHOICES("OFF", "ON"),
-        .update     = monitoring_mode_display,
-        .edit_mode = EM_INLINE_ADJUST,
-        .help = "RAW luma waveform (same scale as histogram).",
-        .help2 = "Off: disabled. On: performance refresh.",
-    },
-#else
-    {
-        .name = "Waveform",
-        .priv       = &waveform_draw,
-        .update = waveform_print,
-        .max = 1,
-        .help = "Exposure aid: useful for checking overall brightness.",
-        .depends_on = DEP_GLOBAL_DRAW | DEP_EXPSIM,
-        .children =  (struct menu_entry[]) {
-            {
-                .name = "Waveform Size",
-                .priv = &waveform_size, 
-                .max = 2,
-                .choices = (const char *[]) {"Small", "Large", "FullScreen"},
-                .icon_type = IT_SIZE,
-                .help = "Waveform size: Small / Large / FullScreen.",
-            },
-            MENU_EOL
-        },
-        //.essential = FOR_LIVEVIEW | FOR_PLAYBACK,
     },
 #endif
     #endif
@@ -5223,6 +5230,9 @@ static void zebra_init()
     //~ menu_add( "Config", cfg_menus, COUNT(cfg_menus) );
     #ifdef FEATURE_CROPMARKS
     menu_add( "Overlay", cropmarks_menu, COUNT(cropmarks_menu) );
+    #endif
+    #ifdef CONFIG_SLIM_MENUS
+    bw_preview_add_slim_menu();     /* fills the "B&W Preview" placeholder, after Cropmarks */
     #endif
 }
 

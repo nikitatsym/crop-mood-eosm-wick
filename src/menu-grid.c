@@ -7,6 +7,7 @@
 #include "gui-common.h"
 #include "config.h"
 #include "lens.h"
+#include "iso-gain.h"
 #include "shoot.h"
 #include "fps.h"
 #include "slim-font.h"
@@ -504,9 +505,11 @@ static int quick_screen_value(
         else
         {
             /* The normal Exposure row already calculates the angle from
-             * current FPS. Reuse those digits and draw the degree ring. */
-            snprintf(buf, size, "%s", info.rinfo[0] ? info.rinfo : "--");
-            *draw_degree = info.rinfo[0] != '\0';
+             * current FPS. Reuse those digits and draw the degree ring.
+             * (FILM standard: the angle is the row's value, the speed its rinfo.) */
+            const char * angle = shutter_angle_display() ? raw_value : info.rinfo;
+            snprintf(buf, size, "%s", angle[0] ? angle : "--");
+            *draw_degree = angle[0] != '\0';
         }
     }
     else if (index == 6)
@@ -517,7 +520,13 @@ static int quick_screen_value(
     }
     else if (index == 7)
     {
-        snprintf(buf, size, "%s", raw_value);
+        if (gain_display())
+        {
+            /* VIDEO standard: Gain only (the cell is too narrow for the ISO as well) */
+            iso_gain_text(buf, size, lens_info.iso ? lens_info.iso_equiv_raw : 72, 0);
+        }
+        else
+            snprintf(buf, size, "%s", raw_value);
     }
     else
     {

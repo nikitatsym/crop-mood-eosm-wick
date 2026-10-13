@@ -32,6 +32,7 @@
 #include "menu.h"
 #include "property.h"
 #include "lens.h"
+#include "iso-gain.h"
 #include "gui.h"
 #include "math.h"
 #include "raw.h"
@@ -1482,20 +1483,19 @@ static MENU_UPDATE_FUNC(iso_display)
 #ifdef CONFIG_SLIM_MENUS
     /* The INFO shortcut changes this config directly; read the same source
      * so menu and Quick Panel update immediately after either path. */
-    int dual_iso = get_config_var("isoless.hdr") > 0;
-    if (!lens_info.iso)
+    /* Dual ISO is disabled in every mode, so the ISO row is never locked by it. */
+    int raw = lens_info.iso ? lens_info.iso_equiv_raw : 72; /* Auto shows as 100 */
+    if (gain_display())
     {
-        MENU_SET_VALUE("100");
-        MENU_SET_ENABLED(!dual_iso);
-        if (dual_iso)
-            MENU_SET_WARNING(MENU_WARN_NOT_WORKING, "Disable Dual ISO to adjust ISO.");
-        MENU_SET_SHORT_NAME(" ");
-        return;
+        /* VIDEO standard: Gain, with the ISO it equals (ISO 100 = 0 dB) */
+        char gain[16];
+        iso_gain_text(gain, sizeof(gain), raw, 1);
+        MENU_SET_NAME("Gain");
+        MENU_SET_VALUE("%s (ISO %d)", gain, raw2iso(raw));
     }
-    MENU_SET_VALUE("%d", raw2iso(lens_info.iso_equiv_raw));
-    MENU_SET_ENABLED(!dual_iso);
-    if (dual_iso)
-        MENU_SET_WARNING(MENU_WARN_NOT_WORKING, "Disable Dual ISO to adjust ISO.");
+    else
+        MENU_SET_VALUE("%d", raw2iso(raw));
+    MENU_SET_ENABLED(1);
     MENU_SET_SHORT_NAME(" ");
 #else
     MENU_SET_VALUE(
@@ -1705,6 +1705,15 @@ iso_toggle( void * priv, int sign )
 extern void shutter_lock_accept(int shutter);
 #endif
 
+static MENU_UPDATE_FUNC(shutter_display);
+
+/* Shutter row in the FILM standard: the angle is the value (◄ 180° ►), the speed second.
+ * menu.c uses this to draw the ° ring after the value instead of after the speed. */
+int shutter_row_angle_first(struct menu_entry * entry)
+{
+    return entry && entry->update == shutter_display && shutter_angle_display();
+}
+
 static MENU_UPDATE_FUNC(shutter_display)
 {
     if (is_movie_mode())
@@ -1713,9 +1722,18 @@ static MENU_UPDATE_FUNC(shutter_display)
         int deg = 3600 * fps_get_current_x1000() / s;
         deg = (deg + 5) / 10;
 #ifdef CONFIG_SLIM_MENUS
-        /* ◄ shutter ► on value; angle digits in rinfo (° drawn as Canon-sized ring). */
-        MENU_SET_VALUE("%s", lens_format_shutter_reciprocal(s, 5));
-        MENU_SET_RINFO("%d", deg);
+        if (shutter_angle_display())
+        {
+            /* FILM standard: ◄ angle ► on value (° ring drawn by menu.c), speed after it */
+            MENU_SET_VALUE("%d", deg);
+            MENU_SET_RINFO("%s", lens_format_shutter_reciprocal(s, 5));
+        }
+        else
+        {
+            /* ◄ shutter ► on value; angle digits in rinfo (° drawn as Canon-sized ring). */
+            MENU_SET_VALUE("%s", lens_format_shutter_reciprocal(s, 5));
+            MENU_SET_RINFO("%d", deg);
+        }
         MENU_SET_ENABLED(1);
 #else
         MENU_SET_VALUE(

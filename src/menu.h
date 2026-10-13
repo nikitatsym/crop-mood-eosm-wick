@@ -316,6 +316,7 @@ extern void menu_move_entry_after(const char * menu_name,
 
 /* Tweaks → Slim Settings entry; registered after EOS M button settings. */
 extern void anamorphic_preview_add_slim_menu(void);
+extern void bw_preview_add_slim_menu(void);
 
 extern void menu_remove(const char * name, struct menu_entry * old_entry, int count);
 
@@ -437,6 +438,9 @@ char* menu_get_str_value_from_script(const char* name, const char* entry_name, s
 int menu_adjust_value_by_name(const char* name, const char* entry_name, int delta);
 int menu_set_value_from_script(const char* name, const char* entry_name, int value);
 int menu_set_str_value_from_script(const char* name, const char* entry_name, char* value, int value_int);
+
+/* Shutter row in the FILM standard: angle is the value, speed the secondary text (shoot.c) */
+int shutter_row_angle_first(struct menu_entry * entry);
 
 extern void gui_stop_menu( void );
 extern void gui_open_menu( void );

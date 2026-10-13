@@ -32,4 +32,6 @@ void idle_led_blink_step(int k);
 void idle_powersave_step();
 int handle_powersave_key(struct event * event);
 void idle_kill_flicker();
+/* after an ML menu closes in LV: keep Canon's overlay (x5 arrows) off */
+void idle_kill_flicker_after_menu();
 #endif
