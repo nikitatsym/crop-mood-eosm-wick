@@ -7060,6 +7060,9 @@ static void menu_close()
     canon_gui_enable_front_buffer(0);
     redraw();
     if (lv) bmp_on();
+#ifdef CONFIG_KILL_FLICKER
+    idle_kill_flicker_after_menu();
+#endif
 }
 
 /*
