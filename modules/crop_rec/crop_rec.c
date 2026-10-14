@@ -6996,6 +6996,26 @@ static unsigned int crop_rec_polling_cbr(unsigned int unused)
         }
 #endif
 
+        /* FILM standard: every session starts at a 172 degree shutter (once, a moment after Live View
+         * has settled; later changes by the user are left alone).  172 degrees is 1/50 s at 23.976 fps. */
+        {
+            static int slim_shutter_default_done = 0;
+            static int slim_shutter_default_t = 0;
+            if (!slim_shutter_default_done)
+            {
+                int now = get_ms_clock();
+                if (!slim_shutter_default_t)
+                    slim_shutter_default_t = now;
+                else if (now - slim_shutter_default_t > 2000)
+                {
+                    slim_shutter_default_done = 1;
+                    int fps_x1000 = fps_get_current_x1000();
+                    if (crop_rec_film_standard() && fps_x1000 > 0)
+                        lens_set_rawshutter(shutterf_to_raw(172.0f * 1000.0f / (360.0f * fps_x1000)));
+                }
+            }
+        }
+
         // FIXME: for now, "More" hacks must be on in order to get wokring preview in 3x3 presets while recording
         // see notes in reg_override_3X3
         {
