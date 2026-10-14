@@ -873,6 +873,10 @@ int handle_common_events_startup(struct event * event)
 
         
         if (event->param == BGMT_LV) return 0; // discard REC button if it's pressed too early
+
+        /* MENU pressed while ML is still starting would open Canon's menu underneath
+         * the start-up screen and leave the display half-drawn; ignore it. */
+        if (event->param == BGMT_MENU) return 0;
         
                 
         return 1; // don't alter any other buttons/events until ML is fully initialized
