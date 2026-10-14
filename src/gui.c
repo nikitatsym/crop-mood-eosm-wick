@@ -73,6 +73,9 @@ static int handle_buttons(struct event * event)
     extern int ml_started;
     if (!ml_started) return 1;
 
+    /* ML start-up screen still up: ignore MENU (Canon's menu would open under it) */
+    extern int boot_logo_is_active(void);
+    if (event->param == BGMT_MENU && boot_logo_is_active()) return 0;
 
     if (handle_common_events_by_feature(event) == 0) return 0;
 
