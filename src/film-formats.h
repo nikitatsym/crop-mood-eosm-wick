@@ -20,8 +20,8 @@
 #ifndef _FILM_FORMATS_H_
 #define _FILM_FORMATS_H_
 
-#define FILM_FRAME_COUNT   23   /* entries in film_frames[], including OFF at index 0 */
-#define FILM_FORMAT_COUNT  11   /* Film Formats in the Movie menu (both standards) */
+#define FILM_FRAME_COUNT   24   /* entries in film_frames[], including OFF at index 0 */
+#define FILM_FORMAT_COUNT  12   /* Film Formats in the Movie menu (both standards) */
 #define FILM_FILM_COUNT    6    /* the first six are the FILM standard; the rest are VIDEO */
 
 /* Sensor readouts the formats are cut from (the crop_rec 1:1 / 3x3 modes).  kn/kd is the
@@ -80,6 +80,8 @@ static const struct film_frame film_frames[FILM_FRAME_COUNT] __attribute__((unus
     { "8mm Actual",         1040,  764, "4.5x3.3mm gate",                    "1:1 3:2 1920x1280", "Actual", FILM_RO_1280 },
     { "8mm 16:9 Crop",      1040,  584, "8mm gate width, cropped to 16:9",   "1:1 3:2 1920x1280", "16:9 Crop", FILM_RO_1280 },
     /* ---- VIDEO standard: video sensor sizes at 1:1 pixel scale (4.30 um per pixel) ---- */
+    /* 1" type (13.2 x 8.8 mm): the full width fits the 3K readout but only 1308 rows exist, so 2.35:1 */
+    { "1\" 2.35:1 Crop",    3056, 1300, "1\" sensor width (13.2 mm), cropped to 2.35:1",  "1:1 2.35:1 3072x1308 Highest", "2.35:1 Crop", FILM_RO_3K },
     /* 2/3" (8.8 x 6.6 mm) */
     { "2/3\" 16:9 Crop",    2032, 1144, "2/3\" sensor width (8.8 mm), cropped to 16:9",   "1:1 16:9 2560x1440",  "16:9 Crop",  FILM_RO_1440 },
     /* 1/2" (6.4 x 4.8 mm) */
@@ -117,11 +119,12 @@ static const struct film_format film_formats[FILM_FORMAT_COUNT] __attribute__((u
     { "S8",             "S8",     10, 2 },
     { "8mm",            "8mm",    12, 2 },
     /* VIDEO standard */
-    { "2/3\"",          "2/3\"",  14, 1 },
-    { "1/2\"",          "1/2\"",  15, 2 },
-    { "1/2.3\"",        "1/2.3\"",17, 2 },
-    { "1/3\"",          "1/3\"",  19, 2 },
-    { "1/4\"",          "1/4\"",  21, 2 },
+    { "1\"",            "1\"",    14, 1 },
+    { "2/3\"",          "2/3\"",  15, 1 },
+    { "1/2\"",          "1/2\"",  16, 2 },
+    { "1/2.3\"",        "1/2.3\"",18, 2 },
+    { "1/3\"",          "1/3\"",  20, 2 },
+    { "1/4\"",          "1/4\"",  22, 2 },
 };
 
 /* index into film_frames[] for a Film Format and a Frame choice (out-of-range input is clamped) */
