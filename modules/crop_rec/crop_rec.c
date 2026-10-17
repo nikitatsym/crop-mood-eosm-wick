@@ -114,6 +114,7 @@ static int crop_preset_fps = 0;
 #define Framerate_18   (crop_preset_fps == 3)   /* slim 1:1 3:2 (S8 / 8mm) only */
 #define Framerate_36   (crop_preset_fps == 4)   /* slim 3x3 3:2 (A35 family) only */
 #define Framerate_48   (crop_preset_fps == 5)   /* slim A35 frames that fit in 976 rows only (shorter readout) */
+#define Framerate_468  (crop_preset_fps == 6)   /* TEST ONLY: the old proven 46.8 fps timers on the same 976-row readout */
 
 /* customized buttons variables
  * EOS M slim defaults:
@@ -2487,12 +2488,20 @@ static inline uint32_t reg_override_3X3(uint32_t reg, uint32_t old_val)
                 TimerB        = crop_preset_fps_reduce == 0x1 ? 0x5a2: 0x50E;
                 TimerA        = 0x20F;  // can go lower down to 0x207
 
-                /* 48.000 fps for the slim A35 frames (see update_patch): 32 MHz / (0x208 * 0x502).
-                 * Slightly faster than the 46.8 above; TEST BUILD, not yet tried on a camera. */
+                /* 48 fps for the slim A35 frames (see update_patch): same line time as the 46.8 above
+                 * (TimerA 0x20F), fewer lines: 32 MHz / (0x210 * 0x4EF) = 47.99 fps.
+                 * The first test build used TimerA 0x207 and showed streaks in the picture.
+                 * TEST BUILD, not yet tried on a camera. */
                 if (Framerate_48)
                 {
-                    TimerA    = 0x207;
-                    TimerB    = 0x501;
+                    TimerA    = 0x20F;
+                    TimerB    = 0x4EE;
+                }
+                /* TEST ONLY: the proven 46.8 timers on the slim A35 readout, to compare against 48 */
+                if (Framerate_468)
+                {
+                    TimerA    = 0x20F;
+                    TimerB    = 0x50E;
                 }
             }
             
@@ -3773,7 +3782,7 @@ static void update_patch()
         /* 48 fps: the A35 frames that fit in 976 rows are read out from the shorter 1736x976
          * High FPS readout (a full 1160-row readout cannot go that fast).  The menu still shows
          * the same A35 format; only the sensor readout underneath changes. */
-        if (crop_preset_fps == 5)
+        if (crop_preset_fps == 5 || crop_preset_fps == 6)
         {
             crop_preset_3x3_res = 0;    /* High_FPS */
             crop_preset_ar      = 0;    /* 16:9, 1736x976 */
@@ -4829,7 +4838,7 @@ static void slim_crop_expected_res(int *w, int *h)
         {
             *w = 1736; *h = 1160;  /* 3:2 */
             /* 48 fps reads the shorter 1736x976 readout instead */
-            if (crop_preset_fps_menu == 5 && (slim_crop_fps_mask() & 0x20))
+            if ((crop_preset_fps_menu == 5 || crop_preset_fps_menu == 6) && (slim_crop_fps_mask() & 0x20))
                 *h = 976;
         }
         return;
@@ -4840,7 +4849,7 @@ static void slim_crop_expected_res(int *w, int *h)
 static int slim_fps_bits(int mask)
 {
     int n = 0;
-    for (int i = 0; i < 6; i++)
+    for (int i = 0; i < 7; i++)
         n += (mask >> i) & 1;
     return n;
 }
@@ -4883,7 +4892,7 @@ static int slim_crop_fps_mask(void)
             /* 48 only where the recorded frame fits in the shorter 976-row readout
              * (A35 16:9, 1.85, 2.35; not the 1152-row anamorphic frames) */
             if (fmt >= 0 && film_frames[film_frame_index(fmt, slim_film_frame_get(fmt))].h <= 976)
-                mask |= 0x20;
+                mask |= 0x20 | 0x40;
             return mask;
         }
         return 0; /* High FPS AR: single fixed rate (shown specially) */
@@ -4899,7 +4908,7 @@ static void slim_crop_clamp_fps(void)
         return; /* LV @ 3 fps — no 24/25/30 index */
     if (mask & (1 << crop_preset_fps_menu))
         return;
-    for (int i = 0; i < 6; i++)
+    for (int i = 0; i < 7; i++)
     {
         if (mask & (1 << i))
         {
@@ -5226,13 +5235,14 @@ static MENU_SELECT_FUNC(slim_crop_fps_select)
     if (bits <= 1)
         return;
 
-    /* order: 18 <-> 23.976 <-> 25 <-> 30 <-> 36 <-> 48 (index 3 is 18, 4 is 36, 5 is 48) */
-    static const int order[6] = { 3, 0, 1, 2, 4, 5 };
+    /* order: 18 <-> 23.976 <-> 25 <-> 30 <-> 36 <-> 46.8 (test) <-> 48
+     * (index 3 is 18, 4 is 36, 5 is 48, 6 is the 46.8 test rate) */
+    static const int order[7] = { 3, 0, 1, 2, 4, 6, 5 };
     int pos = 0;
-    for (int k = 0; k < 6; k++) if (order[k] == crop_preset_fps_menu) pos = k;
-    for (int step = 0; step < 6; step++)
+    for (int k = 0; k < 7; k++) if (order[k] == crop_preset_fps_menu) pos = k;
+    for (int step = 0; step < 7; step++)
     {
-        pos = MOD(pos + (delta < 0 ? -1 : 1), 6);
+        pos = MOD(pos + (delta < 0 ? -1 : 1), 7);
         if (mask & (1 << order[pos]))
         {
             crop_preset_fps_menu = order[pos];
@@ -5284,11 +5294,11 @@ static MENU_UPDATE_FUNC(slim_crop_fps_update)
         return;
     }
 
-    static const char * labels[] = { "23.976", "25", "30", "18", "36", "48" };
+    static const char * labels[] = { "23.976", "25", "30", "18", "36", "48", "46.8" };
     if (slim_video_standard() && crop_preset_fps_menu == 2)
         MENU_SET_VALUE("29.97");   /* VIDEO standard: 2.5K readout snapped to 29.97 */
     else
-        MENU_SET_VALUE("%s", labels[COERCE(crop_preset_fps_menu, 0, 5)]);
+        MENU_SET_VALUE("%s", labels[COERCE(crop_preset_fps_menu, 0, 6)]);
 
     /* Only one valid rate → show it greyed (read-only). */
     int mask = slim_crop_fps_mask();
@@ -5421,10 +5431,10 @@ int crop_rec_touch_get_value(int control, int slot, char *value, int size,
             }
             else
             {
-                static const char *labels[] = { "23.976", "25", "30", "18", "36", "48" };
+                static const char *labels[] = { "23.976", "25", "30", "18", "36", "48", "46.8" };
                 snprintf(value, size, "%s",
                     (slim_video_standard() && crop_preset_fps_menu == 2) ? "29.97" :
-                    labels[COERCE(crop_preset_fps_menu, 0, 5)]);
+                    labels[COERCE(crop_preset_fps_menu, 0, 6)]);
             }
             enabled = bits > 1;
         }
@@ -7819,7 +7829,7 @@ static const struct setting_range crop_settings[] = {
     SETTING(crop_preset_1x1_res_menu,   0,       7,      3),
     SETTING(crop_preset_1x3_res_menu,   0,       3,      1),
     SETTING(crop_preset_3x3_res_menu,   0,       2,      2),
-    SETTING(crop_preset_fps_menu,       0,       5,      0),
+    SETTING(crop_preset_fps_menu,       0,       6,      0),
     SETTING(crop_preset_fps_reduce,     0,       1,      1),
     SETTING(slim_film_fmt,              0,       FILM_FORMAT_COUNT - 1, 0),
     SETTING(slim_film_frames,           0,       (1 << (2 * FILM_FORMAT_COUNT)) - 1, 0),

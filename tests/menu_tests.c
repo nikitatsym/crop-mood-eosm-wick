@@ -85,6 +85,7 @@ int main(void)
             int fits976 = a35 && film_frames[film_frame_index(f, k)].h <= 976;
             CHECK(!!(mask & 0x10) == a35, "format %d frame %d: 36 fps offered=%d, expected %d (mask %x)", f, k, !!(mask & 0x10), a35, mask);
             CHECK(!!(mask & 0x20) == fits976, "format %d frame %d: 48 fps offered=%d, expected %d (mask %x)", f, k, !!(mask & 0x20), fits976, mask);
+            CHECK(!!(mask & 0x40) == fits976, "format %d frame %d: 46.8 test rate offered=%d, expected %d (mask %x)", f, k, !!(mask & 0x40), fits976, mask);
             if (!film_is_video(f))
                 CHECK(!(mask & 4), "FILM format %d frame %d must not offer 30 / 29.97 (mask %x)", f, k, mask);
             else
