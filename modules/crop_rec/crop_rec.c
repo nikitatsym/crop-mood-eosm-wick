@@ -1524,6 +1524,50 @@ static void FAST adtg_hook(uint32_t* regs, uint32_t* stack, uint32_t pc)
     regs[1] = (uint32_t) copy;
 }
 
+/* ---- Temporary diagnostic (not for release): startup shutter log, ML/LOGS/SHUTTER.TXT ---- */
+extern int get_last_time_active();
+#define SHD_MAX 64
+static struct { int t, code, fps, real, raw, std; } shd[SHD_MAX];
+static int shd_n = 0;
+static int shd_t0 = 0;
+
+static void shd_add(int code, int fps, int real, int raw, int std)
+{
+    if (shd_n >= SHD_MAX) return;
+    if (!shd_t0) shd_t0 = get_ms_clock();
+    shd[shd_n].t = get_ms_clock() - shd_t0;
+    shd[shd_n].code = code;
+    shd[shd_n].fps = fps;
+    shd[shd_n].real = real;
+    shd[shd_n].raw = raw;
+    shd[shd_n].std = std;
+    shd_n++;
+}
+
+static void shd_dump(void)
+{
+    if (!shd_n) return;
+    FIO_CreateDirectory("ML/LOGS");
+    FILE *fh = FIO_CreateFileOrAppend("ML/LOGS/SHUTTER.TXT");
+    if (!fh) { shd_n = 0; return; }
+    char *buf = malloc(2048);
+    if (!buf) { FIO_CloseFile(fh); shd_n = 0; return; }
+    int len = snprintf(buf, 2048,
+        "\n== startup shutter: menu fps index %d, more_hacks %d\n"
+        "# code: 0 sample, 1 shutter set again, 2 holds (done), 3 button pressed (stopped)\n"
+        "# ms code fps_x1000 real_shutter_1/x(x1000) raw_shutter film_std\n",
+        crop_preset_fps_menu, is_more_hacks_selected());
+    for (int i = 0; i < shd_n; i++)
+    {
+        len += snprintf(buf + len, 2048 - len, "%5d %d %6d %7d %3d %d\n", shd[i].t, shd[i].code, shd[i].fps, shd[i].real, shd[i].raw, shd[i].std);
+        if (len > 2048 - 80) { FIO_WriteFile(fh, buf, len); len = 0; }
+    }
+    if (len) FIO_WriteFile(fh, buf, len);
+    FIO_CloseFile(fh);
+    free(buf);
+    shd_n = 0;
+}
+
 int analog_gain_is_acive()
 {
     if (CROP_PRESET_MENU) // analog gain is only active when preset is selected
@@ -7001,6 +7045,19 @@ static unsigned int crop_rec_polling_cbr(unsigned int unused)
         {
             static int slim_shutter_default_done = 0;
             static int slim_shutter_default_t = 0;
+            static int sd_last_log = -1000, sd_logging = 1;
+            if (sd_logging)
+            {
+                int now = get_ms_clock();
+                if (!slim_shutter_default_t) slim_shutter_default_t = now;
+                int el = now - slim_shutter_default_t;
+                if (el - sd_last_log >= 500 && el < 25000)
+                {
+                    sd_last_log = el;
+                    shd_add(0, fps_get_current_x1000(), get_current_shutter_reciprocal_x1000(), lens_info.raw_shutter, crop_rec_film_standard());
+                }
+                if (el >= 25000) { sd_logging = 0; shd_dump(); }
+            }
             if (!slim_shutter_default_done)
             {
                 int now = get_ms_clock();
@@ -7011,7 +7068,10 @@ static unsigned int crop_rec_polling_cbr(unsigned int unused)
                     slim_shutter_default_done = 1;
                     int fps_x1000 = fps_get_current_x1000();
                     if (crop_rec_film_standard() && fps_x1000 > 0)
+                    {
                         lens_set_rawshutter(shutterf_to_raw(172.0f * 1000.0f / (360.0f * fps_x1000)));
+                        shd_add(1, fps_x1000, get_current_shutter_reciprocal_x1000(), shutterf_to_raw(172.0f * 1000.0f / (360.0f * fps_x1000)), 1);
+                    }
                 }
             }
         }
