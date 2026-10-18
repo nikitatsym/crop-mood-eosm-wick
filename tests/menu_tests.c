@@ -82,10 +82,9 @@ int main(void)
             /* 36 fps (bit 4): every A35 frame (3x3 readout), nothing else.
              * 48 fps (bit 5): only the A35 frames that fit in the 976-row readout. */
             int a35 = (ro == FILM_RO_3X3);
-            int fits976 = a35 && film_frames[film_frame_index(f, k)].h <= 976;
+            int fits976 = a35 && film_frames[film_frame_index(f, k)].h <= 958;
             CHECK(!!(mask & 0x10) == a35, "format %d frame %d: 36 fps offered=%d, expected %d (mask %x)", f, k, !!(mask & 0x10), a35, mask);
             CHECK(!!(mask & 0x20) == fits976, "format %d frame %d: 48 fps offered=%d, expected %d (mask %x)", f, k, !!(mask & 0x20), fits976, mask);
-            CHECK(!!(mask & 0x40) == fits976, "format %d frame %d: 46.8 test rate offered=%d, expected %d (mask %x)", f, k, !!(mask & 0x40), fits976, mask);
             if (!film_is_video(f))
                 CHECK(!(mask & 4), "FILM format %d frame %d must not offer 30 / 29.97 (mask %x)", f, k, mask);
             else
