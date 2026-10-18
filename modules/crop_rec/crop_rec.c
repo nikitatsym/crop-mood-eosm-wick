@@ -1527,6 +1527,50 @@ static void FAST adtg_hook(uint32_t* regs, uint32_t* stack, uint32_t pc)
     regs[1] = (uint32_t) copy;
 }
 
+/* ---- Temporary diagnostic (not for release): startup shutter log, ML/LOGS/SHUTTER.TXT ---- */
+extern int get_last_time_active();
+#define SHD_MAX 64
+static struct { int t, code, fps, real, raw, std; } shd[SHD_MAX];
+static int shd_n = 0;
+static int shd_t0 = 0;
+
+static void shd_add(int code, int fps, int real, int raw, int std)
+{
+    if (shd_n >= SHD_MAX) return;
+    if (!shd_t0) shd_t0 = get_ms_clock();
+    shd[shd_n].t = get_ms_clock() - shd_t0;
+    shd[shd_n].code = code;
+    shd[shd_n].fps = fps;
+    shd[shd_n].real = real;
+    shd[shd_n].raw = raw;
+    shd[shd_n].std = std;
+    shd_n++;
+}
+
+static void shd_dump(void)
+{
+    if (!shd_n) return;
+    FIO_CreateDirectory("ML/LOGS");
+    FILE *fh = FIO_CreateFileOrAppend("ML/LOGS/SHUTTER.TXT");
+    if (!fh) { shd_n = 0; return; }
+    char *buf = malloc(2048);
+    if (!buf) { FIO_CloseFile(fh); shd_n = 0; return; }
+    int len = snprintf(buf, 2048,
+        "\n== startup shutter: menu fps index %d, more_hacks %d\n"
+        "# code: 0 sample, 1 shutter set again, 2 holds (done), 3 button pressed (stopped)\n"
+        "# ms code fps_x1000 real_shutter_1/x(x1000) raw_shutter film_std\n",
+        crop_preset_fps_menu, is_more_hacks_selected());
+    for (int i = 0; i < shd_n; i++)
+    {
+        len += snprintf(buf + len, 2048 - len, "%5d %d %6d %7d %3d %d\n", shd[i].t, shd[i].code, shd[i].fps, shd[i].real, shd[i].raw, shd[i].std);
+        if (len > 2048 - 80) { FIO_WriteFile(fh, buf, len); len = 0; }
+    }
+    if (len) FIO_WriteFile(fh, buf, len);
+    FIO_CloseFile(fh);
+    free(buf);
+    shd_n = 0;
+}
+
 int analog_gain_is_acive()
 {
     if (CROP_PRESET_MENU) // analog gain is only active when preset is selected
@@ -7134,29 +7178,70 @@ static unsigned int crop_rec_polling_cbr(unsigned int unused)
 
         /* FILM standard: every session starts at a 172 degree shutter (once, a moment after Live View
          * has settled; later changes by the user are left alone).  172 degrees is 1/50 s at 23.976 fps.
-         * The angle is worked out from the frame rate chosen in the menu, not from the rate the sensor
-         * runs at this moment: right after start-up the sensor can still be on Canon's own rate, which
-         * gave a different shutter at every start once 36 / 48 fps existed.  If the FILM format is not
-         * ready yet it tries again for a few seconds, then leaves the shutter alone. */
+         * The angle is worked out from the frame rate chosen in the menu.  The shutter that the sensor
+         * really uses is checked once a second, and set again if something has changed it since,
+         * until it has held for two checks (at most 20 s; stops at the first button press).
+         * Temporary diagnostic: the first 25 s are logged to ML/LOGS/SHUTTER.TXT. */
         {
-            static int slim_shutter_default_done = 0;
-            static int slim_shutter_default_t = 0;
-            if (!slim_shutter_default_done)
+            static int sd_done = 0, sd_t0 = 0, sd_active0 = 0, sd_last_try = 0, sd_last_log = -1000, sd_held = 0;
+            if (!sd_done)
             {
                 int now = get_ms_clock();
-                if (!slim_shutter_default_t)
-                    slim_shutter_default_t = now;
-                else if (now - slim_shutter_default_t > 2000)
+                if (!sd_t0)
+                {
+                    sd_t0 = now;
+                    sd_active0 = get_last_time_active();
+                }
+                else
                 {
                     static const int menu_fps_x1000[6] = { 23976, 25000, 29970, 18000, 35990, 48000 };
-                    int fps_x1000 = menu_fps_x1000[COERCE(crop_preset_fps_menu, 0, 5)];
-                    if (crop_rec_film_standard())
+                    int fps_menu = menu_fps_x1000[COERCE(crop_preset_fps_menu, 0, 5)];
+                    int el = now - sd_t0;
+                    int want = 360 * fps_menu / 172;                       /* wanted shutter, 1/x (x1000) */
+                    int real = get_current_shutter_reciprocal_x1000();     /* what the sensor uses now */
+                    int std = crop_rec_film_standard();
+
+                    if (el - sd_last_log >= 500 && el < 25000)
                     {
-                        slim_shutter_default_done = 1;
-                        lens_set_rawshutter(shutterf_to_raw(172.0f * 1000.0f / (360.0f * fps_x1000)));
+                        sd_last_log = el;
+                        shd_add(0, fps_get_current_x1000(), real, lens_info.raw_shutter, std);
                     }
-                    else if (now - slim_shutter_default_t > 15000)
-                        slim_shutter_default_done = 1;
+
+                    if (el > 2000 && el < 20000 && now - sd_last_try >= 1000)
+                    {
+                        sd_last_try = now;
+                        if (get_last_time_active() != sd_active0)
+                        {
+                            shd_add(3, 0, 0, 0, 0);     /* a button was pressed: leave the shutter alone */
+                            sd_done = 1;
+                        }
+                        else if (std)
+                        {
+                            if (real > 0 && ABS(real - want) * 100 <= want * 15)
+                            {
+                                if (++sd_held >= 2)
+                                {
+                                    shd_add(2, fps_get_current_x1000(), real, lens_info.raw_shutter, std);
+                                    sd_done = 1;
+                                }
+                            }
+                            else
+                            {
+                                sd_held = 0;
+                                int raw = shutterf_to_raw(172.0f * 1000.0f / (360.0f * fps_menu));
+                                lens_set_rawshutter(raw);
+                                shd_add(1, fps_get_current_x1000(), real, raw, std);
+                            }
+                        }
+                    }
+
+                    if (el >= 20000)
+                        sd_done = 1;
+                    if (sd_done || el >= 25000)
+                    {
+                        sd_done = 1;
+                        shd_dump();
+                    }
                 }
             }
         }
