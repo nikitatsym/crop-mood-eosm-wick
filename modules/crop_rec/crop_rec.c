@@ -130,11 +130,9 @@ static CONFIG_INT("crop.shutter_rec", Shutter_rec, 0); /* EOS M slim: 0=OFF, 1=h
 CONFIG_INT("crop.shutter_zoom", Shutter_zoom, 0); /* EOS M slim: 0=OFF, 1=hold x10, 2=sticky x10 */
 CONFIG_INT("crop.arrows_U_D",       Arrows_U_D, 3); /* ISO */
 CONFIG_INT("crop.more_hacks",       more_hacks, 1);
-/* Starting shutter (FILM): applied once, on the first boot after a new build is installed, after the saved settings
- * were wiped, or after the camera clock was reset (date goes backwards, e.g. dead clock battery).  The build id and
- * the last seen date are saved with the other settings. */
+/* Starting shutter (FILM): applied once, on the first boot after a new build is installed or after the saved settings
+ * were wiped.  The build id is saved with the other settings. */
 static CONFIG_INT("crop.shutter_init_build", shutter_init_build, 0);
-static CONFIG_INT("crop.shutter_init_day", shutter_init_day, 0);
 static CONFIG_INT("crop.arrows_L_R",       Arrows_L_R, 2); /* Aperture */
 /* Settings version.  Keeps the old key name so existing config files keep their number
  * (the button conversions below must run only once).  See crop_settings_load(). */
@@ -7158,11 +7156,7 @@ static unsigned int crop_rec_polling_cbr(unsigned int unused)
                     h = h * 33 + *s;
                 sd_id = h ? h : 1;
 
-                struct tm tm;
-                LoadCalendarFromRTC(&tm);
-                int today = (tm.tm_year * 12 + tm.tm_mon) * 31 + tm.tm_mday;
-                int first_boot = (shutter_init_build != sd_id) || (today < shutter_init_day);
-                shutter_init_day = today;
+                int first_boot = (shutter_init_build != sd_id);
                 /* not a first boot: keep the shutter the user left (the shutter lock restores it) */
                 if (!first_boot)
                     sd_done = 1;
@@ -8222,7 +8216,6 @@ MODULE_CONFIGS_START()
     MODULE_CONFIG(Shutter_zoom)
     MODULE_CONFIG(Shutter_rec)
     MODULE_CONFIG(shutter_init_build)
-    MODULE_CONFIG(shutter_init_day)
     MODULE_CONFIG(tapdisp)
     MODULE_CONFIG(Arrows_L_R)
     MODULE_CONFIG(Arrows_U_D)
