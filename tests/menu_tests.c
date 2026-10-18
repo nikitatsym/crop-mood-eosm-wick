@@ -10,7 +10,7 @@ static int failures = 0, checks = 0;
 
 /* the menu state, same names as in crop_rec.c */
 static int slim_mode_ui = 2, slim_1x1_ar = 2, slim_unified_preset = 0, crop_preset_ar_menu = 4;
-static int slim_film_fmt = 0, slim_film_frames = 0;
+static int slim_film_fmt = 0, slim_film_frames = 0, crop_preset_fps_menu = 0;
 static int apply_calls = 0;
 /* backend state read by slim_crop_fps_mask() */
 enum { CROP_PRESET_OFF, CROP_PRESET_1X1, CROP_PRESET_1X3, CROP_PRESET_3X3 };
@@ -95,6 +95,50 @@ int main(void)
                 CHECK(!!(mask & 4) == ok30, "VIDEO format %d frame %d: 29.97 offered=%d, expected %d (mask %x)", f, k, !!(mask & 4), ok30, mask);
             }
         }
+
+    /* 3c. Readout Speed (tenths of ms): recorded height x line time, line time from the readout.
+     *     Independent expectations worked out by hand: rows * clocks / 3200, rounded. */
+    {
+        static const struct { int w, h, fps, x10; } exp[] = {
+            { 1696,  954, 0, 157 }, { 1696,  916, 0, 151 }, { 1696,  722, 0, 119 },   /* A35, 528 clocks */
+            { 1376, 1152, 0, 190 }, { 1536, 1152, 0, 190 },                          /* anamorphic */
+            { 1696,  954, 1, 191 },                                                  /* 25 fps: 640 clocks */
+            { 1696,  954, 4, 157 },                                                  /* 36 fps: 528 clocks */
+            { 1696,  954, 5, 155 }, { 1696,  722, 5, 117 },                          /* 48 fps: 520 clocks */
+            { 2912, 1238, 0, 333 },                                                  /* S16, 3K 860 clocks */
+            { 2384, 1340, 0, 307 },                                                  /* 16mm, 1440p 732 clocks */
+            { 1344,  930, 0, 164 },                                                  /* S8, 1280p 566 clocks */
+            { 3056, 1300, 0, 349 },                                                  /* 1", 3K */
+            { 1424,  800, 0, 179 },                                                  /* 1/2.3", 2.5K 716 clocks */
+        };
+        for (unsigned n = 0; n < sizeof(exp) / sizeof(exp[0]); n++)
+        {
+            int found = 0;
+            for (int f = 0; f < FILM_FORMAT_COUNT && !found; f++)
+                for (int k = 0; k < film_formats[f].count && !found; k++)
+                {
+                    int i = film_frame_index(f, k);
+                    if (film_frames[i].w != exp[n].w || film_frames[i].h != exp[n].h)
+                        continue;
+                    found = 1;
+                    set_state(f, k);
+                    slim_film_apply(f);
+                    crop_preset_fps_menu = exp[n].fps;
+                    CHECK(slim_readout_x10() == exp[n].x10, "%dx%d at fps index %d: readout %d, expected %d",
+                          exp[n].w, exp[n].h, exp[n].fps, slim_readout_x10(), exp[n].x10);
+                }
+            CHECK(found, "readout test: no frame %dx%d", exp[n].w, exp[n].h);
+        }
+        crop_preset_fps_menu = 0;
+        /* every format and frame has a readout time; none is zero or absurd */
+        for (int f = 0; f < FILM_FORMAT_COUNT; f++)
+            for (int k = 0; k < film_formats[f].count; k++)
+            {
+                set_state(f, k);
+                slim_film_apply(f);
+                CHECK(slim_readout_x10() >= 80 && slim_readout_x10() <= 400, "format %d frame %d: readout %d out of range", f, k, slim_readout_x10());
+            }
+    }
 
     /* 4. the default install is FILM */
     slim_film_fmt = 0; slim_film_frames = 0;

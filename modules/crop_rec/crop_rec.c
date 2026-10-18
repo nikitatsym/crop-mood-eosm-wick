@@ -2561,15 +2561,14 @@ static inline uint32_t reg_override_3X3(uint32_t reg, uint32_t old_val)
             Preview_R     = 0x1D000E;
             YUV_HD_S_V    = 0x1050112;
 
-            /* 48 fps for the slim A35 2.35:1 frame (see update_patch).  Third test build ran this at
-             * TimerA 0x207 and the picture showed streaks, strongest at 10-bit.  This one keeps the
-             * slower line time of the 976-row readout (TimerA 0x20F) and a longer frame instead:
-             * 32 MHz / (0x210 * 0x4EF) = 47.99 fps.  EXPERIMENT: if the streaks are gone, the short
-             * line time was the cause. */
+            /* 48 fps for the slim A35 2.35:1 frame (see update_patch): same line time as the
+             * 57 fps above, with a longer frame: 32 MHz / (0x208 * 0x502) = 48.00 fps.
+             * (A camera test with the slower line time, TimerA 0x20F / TimerB 0x4EE, showed the same
+             * streaks at 10-bit and slightly more at 12-bit, so the line time is not the cause.) */
             if (Framerate_48 && is_EOSM)
             {
-                TimerA        = 0x20F;
-                TimerB        = 0x4EE;
+                TimerA        = 0x207;
+                TimerB        = 0x501;
             }
         }
         
@@ -3767,7 +3766,7 @@ static void uninstall_patches()
 }
 
 static int slim_crop_fps_mask(void);
-static int slim_a35_frame_height(void);
+static int slim_film_frame_height(void);
 
 static void update_patch()
 {
@@ -3799,7 +3798,7 @@ static void update_patch()
         if (crop_preset_fps == 5)
         {
             crop_preset_3x3_res = 0;    /* High_FPS */
-            if (slim_a35_frame_height() <= 738)
+            if (slim_film_frame_height() <= 738)
                 crop_preset_ar = 3;     /* 2.35:1, 1736x738 */
             else
             {
@@ -4859,19 +4858,49 @@ static void slim_crop_expected_res(int *w, int *h)
             *w = 1736; *h = 1160;  /* 3:2 */
             /* 48 fps reads a shorter readout instead: 738 rows (2.35:1) or 958 rows */
             if (crop_preset_fps_menu == 5 && (slim_crop_fps_mask() & 0x20))
-                *h = slim_a35_frame_height() <= 738 ? 738 : 958;
+                *h = slim_film_frame_height() <= 738 ? 738 : 958;
         }
         return;
     }
 }
 
-/* height of the recorded A35-family frame (0 when it is not a film format) */
-static int slim_a35_frame_height(void)
+/* height of the recorded film frame (0 when the menu state is not a film format) */
+static int slim_film_frame_height(void)
 {
     int fmt = slim_film_sync();
     if (fmt < 0)
         return 0;
     return film_frames[film_frame_index(fmt, slim_film_frame_get(fmt))].h;
+}
+
+/* Sensor line time in 32 MHz clocks (TimerA + 1) of the readout that the menu state selects,
+ * 0 when unknown.  Only used for the Readout Speed row; keep it in step with the TimerA values
+ * in reg_override_1X1 / reg_override_3X3. */
+static int slim_line_clocks(void)
+{
+    switch (slim_film_menu_readout())
+    {
+        case FILM_RO_3X3:
+            if (crop_preset_fps_menu == 1) return 0x27F + 1;     /* 25 fps */
+            if (crop_preset_fps_menu == 5) return 0x207 + 1;     /* 48 fps (738 or 958 row readout) */
+            return 0x20F + 1;                                    /* 23.976 / 36 fps */
+        case FILM_RO_3K:   return 0x35B + 1;
+        case FILM_RO_1440: return 0x2DB + 1;
+        case FILM_RO_1280: return 0x235 + 1;
+        case FILM_RO_25K:  return 0x2CB + 1;
+    }
+    return 0;
+}
+
+/* Readout Speed: how long the sensor takes to scan the recorded height (rolling shutter), in
+ * tenths of a millisecond; 0 when unknown.  Calculated from the line time, not measured. */
+static int slim_readout_x10(void)
+{
+    int h = slim_film_frame_height();
+    int c = slim_line_clocks();
+    if (h <= 0 || c <= 0)
+        return 0;
+    return (h * c + 1600) / 3200;     /* rows * clocks / 32000 kHz = ms; x10 */
 }
 
 /* number of frame rates a mask offers */
@@ -4919,7 +4948,7 @@ static int slim_crop_fps_mask(void)
             int mask = 0x1 | 0x2 | 0x10;
             /* 48 only where the recorded frame fits in a shorter readout
              * (A35 16:9, 1.85, 2.35; not the 1152-row anamorphic frames) */
-            int h = slim_a35_frame_height();
+            int h = slim_film_frame_height();
             if (h > 0 && h <= 958)
                 mask |= 0x20;
             return mask;
@@ -5173,6 +5202,17 @@ static MENU_UPDATE_FUNC(slim_crop_res_update)
     }
     MENU_SET_VALUE("%dx%d", w, h);
     /* Read-only: greyed via enabled=0 */
+    MENU_SET_ENABLED(0);
+}
+
+static MENU_UPDATE_FUNC(slim_crop_readout_update)
+{
+    slim_crop_sync_from_backend();
+    int t = slim_film_sync() >= 0 ? slim_readout_x10() : 0;
+    if (t > 0)
+        MENU_SET_VALUE("%d.%d ms", t / 10, t % 10);
+    else
+        MENU_SET_VALUE("-");
     MENU_SET_ENABLED(0);
 }
 
@@ -5608,6 +5648,12 @@ static struct menu_entry crop_rec_menu_eosm[] =
         .edit_mode  = EM_INLINE_ADJUST,
         .depends_on = DEP_LIVEVIEW | DEP_MOVIE_MODE,
         .help       = "Recorded picture size (read-only).",
+    },
+    {
+        .name       = "Readout Speed",
+        .update     = slim_crop_readout_update,
+        .depends_on = DEP_LIVEVIEW | DEP_MOVIE_MODE,
+        .help       = "Time the sensor takes to scan the recorded picture top to bottom (rolling shutter). Lower is better. Calculated, not measured.",
     },
     {
         .name       = "Resolution",
