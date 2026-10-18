@@ -1528,7 +1528,6 @@ static void FAST adtg_hook(uint32_t* regs, uint32_t* stack, uint32_t pc)
 }
 
 /* ---- Temporary diagnostic (not for release): startup shutter log, ML/LOGS/SHUTTER.TXT ---- */
-extern int get_last_time_active();
 extern void shutter_lock_accept(int shutter);
 #define SHD_MAX 64
 static struct { int t, code, fps, real, raw, std; } shd[SHD_MAX];
@@ -1558,7 +1557,7 @@ static void shd_dump(void)
     if (!buf) { FIO_CloseFile(fh); shd_n = 0; return; }
     int len = snprintf(buf, 2048,
         "\n== startup shutter: menu fps index %d, more_hacks %d\n"
-        "# code: 0 sample, 1 shutter set again, 2 holds (done), 3 button pressed (stopped)\n"
+        "# code: 0 sample, 1 shutter set again, 2 holds (done), 3 changed by the user (stopped)\n"
         "# ms code fps_x1000 real_shutter_1/x(x1000) raw_shutter film_std\n",
         crop_preset_fps_menu, is_more_hacks_selected());
     for (int i = 0; i < shd_n; i++)
@@ -7184,14 +7183,13 @@ static unsigned int crop_rec_polling_cbr(unsigned int unused)
          * until it has held for two checks (at most 20 s; stops at the first button press).
          * Temporary diagnostic: the first 25 s are logged to ML/LOGS/SHUTTER.TXT. */
         {
-            static int sd_done = 0, sd_t0 = 0, sd_active0 = 0, sd_last_try = 0, sd_last_log = -1000, sd_held = 0;
+            static int sd_done = 0, sd_t0 = 0, sd_first_raw = 0, sd_my_raw = 0, sd_last_try = 0, sd_last_log = -1000, sd_held = 0;
             if (!sd_done)
             {
                 int now = get_ms_clock();
                 if (!sd_t0)
                 {
                     sd_t0 = now;
-                    sd_active0 = get_last_time_active();
                 }
                 else
                 {
@@ -7211,9 +7209,14 @@ static unsigned int crop_rec_polling_cbr(unsigned int unused)
                     if (el > 2000 && el < 20000 && now - sd_last_try >= 1000)
                     {
                         sd_last_try = now;
-                        if (get_last_time_active() != sd_active0)
+                        int cur = lens_info.raw_shutter;
+                        if (!sd_first_raw)
+                            sd_first_raw = cur;
+                        /* The shutter is now neither what it was at boot nor what we set: the user changed it.
+                         * (The check "a button was pressed" fired on its own camera activity, so it is not used.) */
+                        if (sd_my_raw && cur != sd_my_raw && cur != sd_first_raw)
                         {
-                            shd_add(3, 0, 0, 0, 0);     /* a button was pressed: leave the shutter alone */
+                            shd_add(3, 0, 0, cur, 0);   /* changed by the user: leave the shutter alone */
                             sd_done = 1;
                         }
                         else if (std)
@@ -7234,6 +7237,7 @@ static unsigned int crop_rec_polling_cbr(unsigned int unused)
                                  * value it held, within about half a second.  Tell it the new value first, otherwise it
                                  * undoes this (seen in SHUTTER.TXT: 101 written, 111 back). */
                                 shutter_lock_accept(raw);
+                                sd_my_raw = raw;
                                 lens_set_rawshutter(raw);
                                 shd_add(1, fps_get_current_x1000(), real, raw, std);
                             }
