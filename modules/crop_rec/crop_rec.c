@@ -2561,12 +2561,15 @@ static inline uint32_t reg_override_3X3(uint32_t reg, uint32_t old_val)
             Preview_R     = 0x1D000E;
             YUV_HD_S_V    = 0x1050112;
 
-            /* 48 fps for the slim A35 2.35:1 frame (see update_patch): same line time as the
-             * 57 fps above, with a longer frame: 32 MHz / (0x208 * 0x502) = 48.00 fps */
+            /* 48 fps for the slim A35 2.35:1 frame (see update_patch).  Third test build ran this at
+             * TimerA 0x207 and the picture showed streaks, strongest at 10-bit.  This one keeps the
+             * slower line time of the 976-row readout (TimerA 0x20F) and a longer frame instead:
+             * 32 MHz / (0x210 * 0x4EF) = 47.99 fps.  EXPERIMENT: if the streaks are gone, the short
+             * line time was the cause. */
             if (Framerate_48 && is_EOSM)
             {
-                TimerA        = 0x207;
-                TimerB        = 0x501;
+                TimerA        = 0x20F;
+                TimerB        = 0x4EE;
             }
         }
         
@@ -7084,7 +7087,11 @@ static unsigned int crop_rec_polling_cbr(unsigned int unused)
 #endif
 
         /* FILM standard: every session starts at a 172 degree shutter (once, a moment after Live View
-         * has settled; later changes by the user are left alone).  172 degrees is 1/50 s at 23.976 fps. */
+         * has settled; later changes by the user are left alone).  172 degrees is 1/50 s at 23.976 fps.
+         * The angle is worked out from the frame rate chosen in the menu, not from the rate the sensor
+         * runs at this moment: right after start-up the sensor can still be on Canon's own rate, which
+         * gave a different shutter at every start once 36 / 48 fps existed.  If the FILM format is not
+         * ready yet it tries again for a few seconds, then leaves the shutter alone. */
         {
             static int slim_shutter_default_done = 0;
             static int slim_shutter_default_t = 0;
@@ -7095,10 +7102,15 @@ static unsigned int crop_rec_polling_cbr(unsigned int unused)
                     slim_shutter_default_t = now;
                 else if (now - slim_shutter_default_t > 2000)
                 {
-                    slim_shutter_default_done = 1;
-                    int fps_x1000 = fps_get_current_x1000();
-                    if (crop_rec_film_standard() && fps_x1000 > 0)
+                    static const int menu_fps_x1000[6] = { 23976, 25000, 29970, 18000, 35990, 48000 };
+                    int fps_x1000 = menu_fps_x1000[COERCE(crop_preset_fps_menu, 0, 5)];
+                    if (crop_rec_film_standard())
+                    {
+                        slim_shutter_default_done = 1;
                         lens_set_rawshutter(shutterf_to_raw(172.0f * 1000.0f / (360.0f * fps_x1000)));
+                    }
+                    else if (now - slim_shutter_default_t > 15000)
+                        slim_shutter_default_done = 1;
                 }
             }
         }
