@@ -130,7 +130,11 @@ static CONFIG_INT("crop.shutter_rec", Shutter_rec, 0); /* EOS M slim: 0=OFF, 1=h
 CONFIG_INT("crop.shutter_zoom", Shutter_zoom, 0); /* EOS M slim: 0=OFF, 1=hold x10, 2=sticky x10 */
 CONFIG_INT("crop.arrows_U_D",       Arrows_U_D, 3); /* ISO */
 CONFIG_INT("crop.more_hacks",       more_hacks, 1);
-static CONFIG_INT("crop.shutter_init", shutter_init_done, 0); /* 1 once the 172 degree starting shutter was applied (first boot only) */
+/* Starting shutter (FILM): applied once, on the first boot after a new build is installed, after the saved settings
+ * were wiped, or after the camera clock was reset (date goes backwards, e.g. dead clock battery).  The build id and
+ * the last seen date are saved with the other settings. */
+static CONFIG_INT("crop.shutter_init_build", shutter_init_build, 0);
+static CONFIG_INT("crop.shutter_init_day", shutter_init_day, 0);
 static CONFIG_INT("crop.arrows_L_R",       Arrows_L_R, 2); /* Aperture */
 /* Settings version.  Keeps the old key name so existing config files keep their number
  * (the button conversions below must run only once).  See crop_settings_load(). */
@@ -7136,16 +7140,33 @@ static unsigned int crop_rec_polling_cbr(unsigned int unused)
         }
 #endif
 
-        /* FILM standard: the very first boot starts at a 172 degree shutter (a moment after Live View
-         * has settled).  After that the shutter the user left is kept across power cycles, so this runs
-         * only until shutter_init_done is saved.  172 degrees is 1/50 s at 23.976 fps.
+        /* FILM standard: the first boot (new build installed, settings wiped or clock reset, see
+         * shutter_init_build) starts at a 172 degree shutter, a moment after Live View has settled.
+         * After that the shutter the user left is kept across power cycles.  172 degrees is 1/50 s at 23.976 fps.
          * The angle is worked out from the frame rate chosen in the menu.  The shutter that the sensor
          * really uses is checked once a second, and set again if something has changed it since,
          * until it has held for two checks (at most 20 s; it stops if the user changes the shutter). */
         {
             static int sd_done = 0, sd_t0 = 0, sd_first_raw = 0, sd_my_raw = 0, sd_last_try = 0, sd_held = 0;
-            if (shutter_init_done)
-                sd_done = 1;    /* not the first boot: keep the shutter the user left (the shutter lock restores it) */
+            static int sd_id = 0;
+            if (!sd_id && !sd_done)
+            {
+                /* decide once per boot whether this is a "first boot" */
+                const char *s = __DATE__ " " __TIME__;
+                int h = 5381;
+                for (; *s; s++)
+                    h = h * 33 + *s;
+                sd_id = h ? h : 1;
+
+                struct tm tm;
+                LoadCalendarFromRTC(&tm);
+                int today = (tm.tm_year * 12 + tm.tm_mon) * 31 + tm.tm_mday;
+                int first_boot = (shutter_init_build != sd_id) || (today < shutter_init_day);
+                shutter_init_day = today;
+                /* not a first boot: keep the shutter the user left (the shutter lock restores it) */
+                if (!first_boot)
+                    sd_done = 1;
+            }
             if (!sd_done)
             {
                 int now = get_ms_clock();
@@ -7170,7 +7191,7 @@ static unsigned int crop_rec_polling_cbr(unsigned int unused)
                         if (sd_my_raw && cur != sd_my_raw && cur != sd_first_raw)
                         {
                             sd_done = 1;
-                            shutter_init_done = 1;      /* the user took over: no more defaults */
+                            shutter_init_build = sd_id;     /* the user took over: no more defaults */
                         }
                         else if (std)
                         {
@@ -7179,7 +7200,7 @@ static unsigned int crop_rec_polling_cbr(unsigned int unused)
                                 if (++sd_held >= 2)
                                 {
                                     sd_done = 1;
-                                    shutter_init_done = 1;
+                                    shutter_init_build = sd_id;
                                 }
                             }
                             else
@@ -8200,7 +8221,8 @@ MODULE_CONFIGS_START()
     MODULE_CONFIG(INFO_button)
     MODULE_CONFIG(Shutter_zoom)
     MODULE_CONFIG(Shutter_rec)
-    MODULE_CONFIG(shutter_init_done)
+    MODULE_CONFIG(shutter_init_build)
+    MODULE_CONFIG(shutter_init_day)
     MODULE_CONFIG(tapdisp)
     MODULE_CONFIG(Arrows_L_R)
     MODULE_CONFIG(Arrows_U_D)
