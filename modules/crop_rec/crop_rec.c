@@ -1529,6 +1529,7 @@ static void FAST adtg_hook(uint32_t* regs, uint32_t* stack, uint32_t pc)
 
 /* ---- Temporary diagnostic (not for release): startup shutter log, ML/LOGS/SHUTTER.TXT ---- */
 extern int get_last_time_active();
+extern void shutter_lock_accept(int shutter);
 #define SHD_MAX 64
 static struct { int t, code, fps, real, raw, std; } shd[SHD_MAX];
 static int shd_n = 0;
@@ -7229,6 +7230,10 @@ static unsigned int crop_rec_polling_cbr(unsigned int unused)
                             {
                                 sd_held = 0;
                                 int raw = shutterf_to_raw(172.0f * 1000.0f / (360.0f * fps_menu));
+                                /* The EOS M always runs the shutter lock (movtweaks.c): it puts the shutter back to the
+                                 * value it held, within about half a second.  Tell it the new value first, otherwise it
+                                 * undoes this (seen in SHUTTER.TXT: 101 written, 111 back). */
+                                shutter_lock_accept(raw);
                                 lens_set_rawshutter(raw);
                                 shd_add(1, fps_get_current_x1000(), real, raw, std);
                             }
