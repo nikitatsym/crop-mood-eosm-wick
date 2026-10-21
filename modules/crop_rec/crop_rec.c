@@ -6737,8 +6737,66 @@ static void slim_cover_hold_and_release(int hold_ms)
 }
 
 /* when closing ML menu, check whether we need to refresh the LiveView */
+
+/* ---- Temporary diagnostic (not for release): live view guard log, ML/LOGS/LVGUARD.TXT ---- */
+#define LVL_MAX 120
+static struct { int t, lv, zoom, disp, menu, movie, pend, busy, state, kill, fbdis, rec; } lvl[LVL_MAX];
+static int lvl_n = 0, lvl_t0 = 0, lvl_last_change = 0;
+
+static void lvlog_sample(int menu_shown)
+{
+    extern int kill_canon_gui_mode;
+    int now = get_ms_clock();
+    if (!lvl_t0) lvl_t0 = now;
+#ifdef CONFIG_EOSM
+    int g_pend = eosm_lv_guard_pending, g_busy = eosm_lv_guard_busy, g_state = eosm_lv_guard_state;
+#else
+    int g_pend = -1, g_busy = -1, g_state = -1;
+#endif
+    int cur[11] = { lv, lv_dispsize, lv_disp_mode, menu_shown, is_movie_mode(), g_pend, g_busy,
+                    g_state, kill_canon_gui_mode, canon_gui_front_buffer_disabled(), RECORDING };
+    static int prev[11] = { -1 };
+    int changed = 0;
+    for (int i = 0; i < 11; i++) if (cur[i] != prev[i]) changed = 1;
+    if (changed && lvl_n < LVL_MAX)
+    {
+        lvl[lvl_n].t = now - lvl_t0;
+        lvl[lvl_n].lv = cur[0]; lvl[lvl_n].zoom = cur[1]; lvl[lvl_n].disp = cur[2]; lvl[lvl_n].menu = cur[3];
+        lvl[lvl_n].movie = cur[4]; lvl[lvl_n].pend = cur[5]; lvl[lvl_n].busy = cur[6]; lvl[lvl_n].state = cur[7];
+        lvl[lvl_n].kill = cur[8]; lvl[lvl_n].fbdis = cur[9]; lvl[lvl_n].rec = cur[10];
+        lvl_n++;
+    }
+    if (changed)
+    {
+        for (int i = 0; i < 11; i++) prev[i] = cur[i];
+        lvl_last_change = now;
+    }
+    /* write the log once things have been quiet for 6 s */
+    if (lvl_n && now - lvl_last_change > 6000)
+    {
+        FIO_CreateDirectory("ML/LOGS");
+        FILE *fh = FIO_CreateFileOrAppend("ML/LOGS/LVGUARD.TXT");
+        char *buf = fh ? malloc(4096) : 0;
+        if (buf)
+        {
+            int len = snprintf(buf, 4096, "\n== live view log\n# ms lv zoom disp menu movie pend busy state kill fb_disabled rec\n");
+            for (int i = 0; i < lvl_n; i++)
+            {
+                len += snprintf(buf + len, 4096 - len, "%6d %d %2d %d %d %d %d %d %d %d %d %d\n", lvl[i].t, lvl[i].lv, lvl[i].zoom, lvl[i].disp, lvl[i].menu,
+                                lvl[i].movie, lvl[i].pend, lvl[i].busy, lvl[i].state, lvl[i].kill, lvl[i].fbdis, lvl[i].rec);
+                if (len > 4096 - 100) { FIO_WriteFile(fh, buf, len); len = 0; }
+            }
+            if (len) FIO_WriteFile(fh, buf, len);
+            free(buf);
+        }
+        if (fh) FIO_CloseFile(fh);
+        lvl_n = 0;
+    }
+}
+
 static unsigned int crop_rec_polling_cbr(unsigned int unused)
 {
+    lvlog_sample(gui_menu_shown());
     /* touch/Movie-tab shortcuts inject Q+SET into an open menu — not used on slim. */
 #ifndef CONFIG_SLIM_MENUS
     if (gui_menu_shown() && submenu && !RECORDING)
