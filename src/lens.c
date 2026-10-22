@@ -2719,10 +2719,15 @@ static LVINFO_UPDATE_FUNC(fps_update)
     if (is_movie_mode())
     {
         int f = fps_get_current_x1000();
-        snprintf(buffer, sizeof(buffer), 
-            "%2d.%03d", 
-            f / 1000, f % 1000
-        );
+        if (ABS(f - 36000) <= 60)
+            snprintf(buffer, sizeof(buffer), "36fps");
+        else if (ABS(f - 48000) <= 60)
+            snprintf(buffer, sizeof(buffer), "48fps");
+        else
+            snprintf(buffer, sizeof(buffer),
+                "%2d.%03d",
+                f / 1000, f % 1000
+            );
     }
 }
 
