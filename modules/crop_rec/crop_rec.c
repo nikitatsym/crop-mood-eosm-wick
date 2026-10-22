@@ -5143,8 +5143,12 @@ static MENU_UPDATE_FUNC(slim_crop_preset_update)
             {
                 int i = film_frame_index(film_fmt, slim_film_frame_get(film_fmt));
                 MENU_SET_VALUE("%dx%d", film_frames[i].w, film_frames[i].h);
+                /* Readout speed on the same row, like the shutter row shows angle and speed together */
+                int t = slim_readout_x10();
+                if (t > 0)
+                    MENU_SET_RINFO("%d.%d ms", t / 10, t % 10);
             }
-            MENU_SET_HELP("Size of the recorded picture (read-only).");
+            MENU_SET_HELP("Size of the recorded picture, and the time the sensor takes to read it out top to bottom (rolling shutter; lower is better). Calculated, not measured. Read-only.");
             MENU_SET_ENABLED(0);
             return;
         }
@@ -5210,17 +5214,6 @@ static MENU_UPDATE_FUNC(slim_crop_res_update)
     }
     MENU_SET_VALUE("%dx%d", w, h);
     /* Read-only: greyed via enabled=0 */
-    MENU_SET_ENABLED(0);
-}
-
-static MENU_UPDATE_FUNC(slim_crop_readout_update)
-{
-    slim_crop_sync_from_backend();
-    int t = slim_film_sync() >= 0 ? slim_readout_x10() : 0;
-    if (t > 0)
-        MENU_SET_VALUE("%d.%d ms", t / 10, t % 10);
-    else
-        MENU_SET_VALUE("-");
     MENU_SET_ENABLED(0);
 }
 
@@ -5656,12 +5649,6 @@ static struct menu_entry crop_rec_menu_eosm[] =
         .edit_mode  = EM_INLINE_ADJUST,
         .depends_on = DEP_LIVEVIEW | DEP_MOVIE_MODE,
         .help       = "Recorded picture size (read-only).",
-    },
-    {
-        .name       = "Readout Speed",
-        .update     = slim_crop_readout_update,
-        .depends_on = DEP_LIVEVIEW | DEP_MOVIE_MODE,
-        .help       = "Time the sensor takes to scan the recorded picture top to bottom (rolling shutter). Lower is better. Calculated, not measured.",
     },
     {
         .name       = "Resolution",
