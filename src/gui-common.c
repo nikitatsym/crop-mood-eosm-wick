@@ -1126,6 +1126,9 @@ void reckey_log_all(struct event * event)
     static int n = 0, last_type = -1, last_param = -1, same = 0, t0 = 0;
     if (!ml_started)
         return;
+    /* only real button events: the camera also sends a constant stream of internal events (type 2 / 4) */
+    if (event->type != 0)
+        return;
     if (!t0)
         t0 = get_ms_clock();
     if (event->type == last_type && event->param == last_param)
