@@ -5483,6 +5483,36 @@ static unsigned int raw_rec_deinit()
     return 0;
 }
 
+/* ---- DIAG (temporary): recording statistics for the crop_rec diagnostic log ---------------------
+ * Read-only snapshot of the recorder state; changes nothing.  Remove together with crop_rec's diag.inc. */
+void __attribute__((used)) mlv_lite_diag_get(int *o)
+{
+    int q = writing_queue_tail - writing_queue_head;
+    if (q < 0) q += COUNT(slots) + 1;
+    o[0]  = raw_recording_state;
+    o[1]  = frame_count;
+    o[2]  = skipped_frames;
+    o[3]  = buffer_full;
+    o[4]  = count_free_slots();
+    o[5]  = valid_slot_count;
+    o[6]  = q;
+    o[7]  = measured_write_speed;
+    o[8]  = measured_compression_ratio;
+    o[9]  = res_x;
+    o[10] = res_y;
+    o[11] = (int)(written_total[0] >> 20);
+    o[12] = writing_time[0];
+    o[13] = idle_time[0];
+    o[14] = output_format;
+    o[15] = small_hacks;
+    o[16] = preview_mode;
+    o[17] = pre_record;
+    o[18] = card_spanning;
+    o[19] = use_srm_memory;
+    o[20] = max_frame_size;
+    o[21] = kill_gd;
+}
+
 MODULE_INFO_START()
     MODULE_INIT(raw_rec_init)
     MODULE_DEINIT(raw_rec_deinit)

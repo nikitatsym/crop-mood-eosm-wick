@@ -991,6 +991,10 @@ int CMOS_7_Debug = 0;
 /* pack two 16-bit values into a 32-bit one */
 #define PACK32(lo,hi) (((uint32_t)(lo) & 0xFFFF) | ((uint32_t)(hi) << 16))
 
+/* DIAG (temporary): see diag.inc */
+static void dg_capture_adtg(int dst, const uint32_t *list);
+static void dg_capture_cmos(const uint16_t *list);
+
 static void FAST cmos_hook(uint32_t* regs, uint32_t* stack, uint32_t pc)
 {
     /* make sure we are in 1080p/720p mode */
@@ -1189,6 +1193,7 @@ static void FAST cmos_hook(uint32_t* regs, uint32_t* stack, uint32_t pc)
     }
     *copy_ptr = 0xFFFF;
 
+    dg_capture_cmos(copy);  /* DIAG */
     /* pass our modified register list to cmos_write */
     regs[0] = (uint32_t) copy;
 }
@@ -1528,6 +1533,7 @@ static void FAST adtg_hook(uint32_t* regs, uint32_t* stack, uint32_t pc)
     }
     *copy_ptr = 0xFFFFFFFF;
     
+    dg_capture_adtg(dst, copy);  /* DIAG */
     /* pass our modified register list to adtg_write */
     regs[1] = (uint32_t) copy;
 }
@@ -6867,9 +6873,13 @@ static void slim_cover_hold_and_release(int hold_ms)
     lens_display_set_dirty();
 }
 
+#include "diag.inc"  /* DIAG (temporary) */
+
 /* when closing ML menu, check whether we need to refresh the LiveView */
 static unsigned int crop_rec_polling_cbr(unsigned int unused)
 {
+    dg_tick();  /* DIAG */
+
     /* touch/Movie-tab shortcuts inject Q+SET into an open menu — not used on slim. */
 #ifndef CONFIG_SLIM_MENUS
     if (gui_menu_shown() && submenu && !RECORDING)
@@ -8219,6 +8229,7 @@ MODULE_CONFIGS_END()
 
 MODULE_CBRS_START()
     MODULE_CBR(CBR_SHOOT_TASK, crop_rec_polling_cbr, 0)
+    MODULE_CBR(CBR_VSYNC, dg_vsync_cbr, 0)  /* DIAG */
     MODULE_CBR(CBR_RAW_INFO_UPDATE, raw_info_update_cbr, 0)
     MODULE_CBR(CBR_KEYPRESS, crop_rec_keypress_cbr, 0)
     MODULE_CBR(CBR_KEYPRESS, photo_keypress_cbr, 0)
