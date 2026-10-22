@@ -69,10 +69,7 @@ static int handle_buttons(struct event * event)
     ASSERT(event->type == 0)
 
     if (event->type != 0) return 1; // only handle events with type=0 (buttons)
-    extern void reckey_log(struct event * event, int tag);
-    reckey_log(event, 1);
     if (handle_common_events_startup(event) == 0) return 0;
-    reckey_log(event, 2);
     extern int ml_started;
     if (!ml_started) return 1;
 
@@ -125,10 +122,6 @@ void ml_gui_main_task()
         }
 
         index = event->type;
-        {
-            extern void reckey_log_all(struct event * event);
-            reckey_log_all(event);
-        }
 
         if (!magic_is_off())
         {

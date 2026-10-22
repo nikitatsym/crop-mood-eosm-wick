@@ -1117,61 +1117,6 @@ int handle_digital_zoom_shortcut(struct event * event)
 }
 #endif //FEATURE_DIGITAL_ZOOM_SHORTCUT
 
-
-/* ---- Temporary diagnostic (not for release): how far does the REC key get?  ML/LOGS/RECKEY.TXT ---- */
-/* log every event the GUI task receives (type, param) after ML is up, skipping runs of the same one */
-void reckey_log_all(struct event * event)
-{
-    extern int ml_started;
-    static int n = 0, last_type = -1, last_param = -1, same = 0, t0 = 0;
-    if (!ml_started)
-        return;
-    /* only real button events: the camera also sends a constant stream of internal events (type 2 / 4) */
-    if (event->type != 0)
-        return;
-    if (!t0)
-        t0 = get_ms_clock();
-    if (event->type == last_type && event->param == last_param)
-    {
-        if (++same > 2)
-            return;
-    }
-    else
-        same = 0;
-    last_type = event->type;
-    last_param = event->param;
-    if (n >= 250)
-        return;
-    n++;
-    FIO_CreateDirectory("ML/LOGS");
-    FILE *fh = FIO_CreateFileOrAppend("ML/LOGS/RECKEY.TXT");
-    if (!fh)
-        return;
-    char line[100];
-    int len = snprintf(line, sizeof(line), "%d event type=%d param=0x%x arg=%d%s\n", get_ms_clock() - t0, event->type, event->param, event->arg,
-                       (event->type == 0 && event->param == BGMT_LV) ? "   <== REC" : "");
-    FIO_WriteFile(fh, line, len);
-    FIO_CloseFile(fh);
-}
-
-void reckey_log(struct event * event, int tag)
-{
-    if (event->type != 0 || event->param != BGMT_LV)
-        return;
-    static int n = 0;
-    if (n >= 150)
-        return;
-    n++;
-    FIO_CreateDirectory("ML/LOGS");
-    FILE *fh = FIO_CreateFileOrAppend("ML/LOGS/RECKEY.TXT");
-    if (!fh)
-        return;
-    char line[100];
-    int len = snprintf(line, sizeof(line), "%d core REC key stage %d lv=%d zoom=%d rec=%d\n", get_ms_clock(), tag, lv, lv_dispsize, RECORDING);
-    FIO_WriteFile(fh, line, len);
-    FIO_CloseFile(fh);
-}
-
 static int null_event_handler(struct event * event) { return 1; }
 int handle_module_keys(struct event * event) __attribute__((weak,alias("null_event_handler")));
 int handle_flexinfo_keys(struct event * event) __attribute__((weak,alias("null_event_handler")));
@@ -1217,20 +1162,14 @@ int handle_common_events_by_feature(struct event * event)
         last_time_active = get_seconds_clock();
 
 #ifdef CONFIG_SLIM_MENUS
-    reckey_log(event, 10);
     if (!menu_white_card_wb_handle_key(event->param, IS_FAKE(event))) return 0;
-    reckey_log(event, 11);
     if (handle_slim_rec_touch_block(event) == 0) return 0;
-    reckey_log(event, 12);
     if (handle_slim_lv_editor_keys(event) == 0) return 0;
-    reckey_log(event, 13);
     if (handle_slim_info_longpress(event) == 0) return 0;
-    reckey_log(event, 14);
 #endif
 
     /* convert Q replacement events into BGMT_Q */
     if (handle_Q_button_equiv(event) == 0) return 0;
-    reckey_log(event, 15);
 
     #ifdef CONFIG_MENU_WITH_AV
     if (handle_av_short_for_menu(event) == 0) return 0;
@@ -1238,7 +1177,6 @@ int handle_common_events_by_feature(struct event * event)
 
     /* before module_keys, to be able to process long-press SET/Q events and forward them to modules/scripts */
     if (handle_longpress_events(event) == 0) return 0;
-    reckey_log(event, 16);
 
     #ifdef FEATURE_MAGIC_ZOOM
     /* must be before handle_module_keys to allow zoom while recording raw,
@@ -1246,9 +1184,7 @@ int handle_common_events_by_feature(struct event * event)
     if (handle_zoom_overlay(event) == 0) return 0;
     #endif
 
-    reckey_log(event, 17);
     if (handle_module_keys(event) == 0) return 0;
-    reckey_log(event, 18);
     if (handle_flexinfo_keys(event) == 0) return 0;
 
     #ifdef FEATURE_DIGITAL_ZOOM_SHORTCUT
