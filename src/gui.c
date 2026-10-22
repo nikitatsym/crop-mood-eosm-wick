@@ -125,6 +125,10 @@ void ml_gui_main_task()
         }
 
         index = event->type;
+        {
+            extern void reckey_log_all(struct event * event);
+            reckey_log_all(event);
+        }
 
         if (!magic_is_off())
         {

@@ -1119,6 +1119,38 @@ int handle_digital_zoom_shortcut(struct event * event)
 
 
 /* ---- Temporary diagnostic (not for release): how far does the REC key get?  ML/LOGS/RECKEY.TXT ---- */
+/* log every event the GUI task receives (type, param) after ML is up, skipping runs of the same one */
+void reckey_log_all(struct event * event)
+{
+    extern int ml_started;
+    static int n = 0, last_type = -1, last_param = -1, same = 0, t0 = 0;
+    if (!ml_started)
+        return;
+    if (!t0)
+        t0 = get_ms_clock();
+    if (event->type == last_type && event->param == last_param)
+    {
+        if (++same > 2)
+            return;
+    }
+    else
+        same = 0;
+    last_type = event->type;
+    last_param = event->param;
+    if (n >= 250)
+        return;
+    n++;
+    FIO_CreateDirectory("ML/LOGS");
+    FILE *fh = FIO_CreateFileOrAppend("ML/LOGS/RECKEY.TXT");
+    if (!fh)
+        return;
+    char line[100];
+    int len = snprintf(line, sizeof(line), "%d event type=%d param=0x%x arg=%d%s\n", get_ms_clock() - t0, event->type, event->param, event->arg,
+                       (event->type == 0 && event->param == BGMT_LV) ? "   <== REC" : "");
+    FIO_WriteFile(fh, line, len);
+    FIO_CloseFile(fh);
+}
+
 void reckey_log(struct event * event, int tag)
 {
     if (event->type != 0 || event->param != BGMT_LV)
