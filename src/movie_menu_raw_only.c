@@ -29,6 +29,7 @@ static struct menu_entry movie_menu_raw_toggle[] =
     { .name = "Mode",                 .placeholder = 1 },
     { .name = "Aspect Ratio",         .placeholder = 1 },
     { .name = "Preset",               .placeholder = 1 },
+    { .name = "Readout Speed",        .placeholder = 1 },
     { .name = "Resolution",           .placeholder = 1 },
     { .name = "Frame Rate",           .placeholder = 1 },
     { .name = "Bit Depth",            .placeholder = 1 },
