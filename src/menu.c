@@ -2926,8 +2926,9 @@ entry_print(
     /* Reclaim icon column so label starts where the left meter used to be. */
     if (slim_style)
         x -= MENU_OFFSET;
-    /* Drop Av/Tv/Sv/DR+ side text; Shutter keeps ° in rinfo (drawn after arrows). */
-    if (!(entry->name && streq(entry->name, "Shutter")))
+    /* Drop Av/Tv/Sv/DR+ side text; Shutter keeps ° in rinfo (drawn after arrows).
+     * The Preset row ("Recorded Size") keeps its readout time on the right. */
+    if (!(entry->name && (streq(entry->name, "Shutter") || streq(entry->name, "Preset"))))
         info->rinfo[0] = 0;
 #endif
 
