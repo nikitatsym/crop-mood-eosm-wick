@@ -4960,6 +4960,28 @@ static int shutter_rec_press_taken = 0;
 static REQUIRES(GuiMainTask)
 unsigned int raw_rec_keypress_cbr(unsigned int key)
 {
+    /* Temporary diagnostic (not for release): why does the REC key do nothing?  ML/LOGS/RECKEY.TXT */
+    if (key == MODULE_KEY_LV || key == MODULE_KEY_REC || key == MODULE_KEY_PRESS_HALFSHUTTER)
+    {
+        static int reckey_n = 0;
+        if (reckey_n < 40)
+        {
+            reckey_n++;
+            FIO_CreateDirectory("ML/LOGS");
+            FILE *fh = FIO_CreateFileOrAppend("ML/LOGS/RECKEY.TXT");
+            if (fh)
+            {
+                char line[200];
+                int len = snprintf(line, sizeof(line),
+                    "%d key=%d raw_enabled=%d movie=%d lv_idle=%d h264=%d mq=%d state=%d rec=%d lv=%d zoom=%d menu=%d\n",
+                    get_ms_clock(), (int)key, (int)raw_video_enabled, is_movie_mode(), liveview_display_idle(),
+                    (int)RECORDING_H264, compress_mq != 0, (int)raw_recording_state, (int)RECORDING, lv, lv_dispsize, gui_menu_shown());
+                FIO_WriteFile(fh, line, len);
+                FIO_CloseFile(fh);
+            }
+        }
+    }
+
     if (key == MODULE_KEY_UNPRESS_HALFSHUTTER && shutter_rec_press_taken)
     {
         shutter_rec_press_taken = 0;
