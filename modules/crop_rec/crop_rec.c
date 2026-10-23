@@ -8045,6 +8045,7 @@ static void crop_settings_load(void)
 
 static unsigned int crop_rec_init()
 {
+    brighten_lv_method = 1;  /* DIAG-EVF: test build only, forces the EVF preview-brightening method */
     //Will place afframe so that 2_1 HFR presets will work at least after restart
     if (!is_manual_focus())
     {
