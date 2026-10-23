@@ -5684,7 +5684,7 @@ static struct menu_entry crop_rec_menu_eosm[] =
         .choices    = CHOICES("10 Bit", "11 Bit", "12 Bit", "14 Bit"),
         .edit_mode  = EM_INLINE_ADJUST,
         .depends_on = DEP_LIVEVIEW | DEP_MOVIE_MODE,
-        .help       = "Lossless RAW bit depth. Always available.",
+        .help       = "Lossless RAW bit depth. 10 and 11 Bit can show a faint line pattern in deep shadows of the live preview while recording; it is much weaker in the recorded file.",
     },
 };
 
