@@ -112,6 +112,9 @@ static int crop_preset_fps = 0;
 #define Framerate_25   (crop_preset_fps == 1)
 #define Framerate_30   (crop_preset_fps == 2)
 #define Framerate_18   (crop_preset_fps == 3)   /* slim 1:1 3:2 (S8 / 8mm) only */
+#define Framerate_36   (crop_preset_fps == 4)   /* slim 3x3 3:2 (A35 family) only */
+#define Framerate_48   (crop_preset_fps == 5)   /* slim A35 frames that fit in a short readout (see update_patch) */
+static int a35_short_readout = 0;   /* 48 fps on A35 16:9 / 1.85: 1736x958 readout (set in update_patch) */
 
 /* customized buttons variables
  * EOS M slim defaults:
@@ -127,6 +130,11 @@ static CONFIG_INT("crop.shutter_rec", Shutter_rec, 0); /* EOS M slim: 0=OFF, 1=h
 CONFIG_INT("crop.shutter_zoom", Shutter_zoom, 0); /* EOS M slim: 0=OFF, 1=hold x10, 2=sticky x10 */
 CONFIG_INT("crop.arrows_U_D",       Arrows_U_D, 3); /* ISO */
 CONFIG_INT("crop.more_hacks",       more_hacks, 1);
+/* Starting shutter (FILM): applied once, on the first boot after a new build is installed, after the saved settings
+ * were wiped, or after the camera clock was reset (date goes backwards, e.g. dead clock battery).  The build id and
+ * the last seen date are saved with the other settings. */
+static CONFIG_INT("crop.shutter_init_build", shutter_init_build, 0);
+static CONFIG_INT("crop.shutter_init_day", shutter_init_day, 0);
 static CONFIG_INT("crop.arrows_L_R",       Arrows_L_R, 2); /* Aperture */
 /* Settings version.  Keeps the old key name so existing config files keep their number
  * (the button conversions below must run only once).  See crop_settings_load(). */
@@ -1524,6 +1532,9 @@ static void FAST adtg_hook(uint32_t* regs, uint32_t* stack, uint32_t pc)
     regs[1] = (uint32_t) copy;
 }
 
+/* movtweaks.c: the EOS M shutter lock; used by the startup shutter below */
+extern void shutter_lock_accept(int shutter);
+
 int analog_gain_is_acive()
 {
     if (CROP_PRESET_MENU) // analog gain is only active when preset is selected
@@ -2491,6 +2502,21 @@ static inline uint32_t reg_override_3X3(uint32_t reg, uint32_t old_val)
             Preview_V     = 976;
             Preview_R     = 0x1D000E;  // from mv1080 mode
             YUV_HD_S_V    = 0x105016C;
+
+            /* 48 fps for the slim A35 16:9 and 1.85:1 frames (see update_patch).  The 976-row
+             * readout cannot go that fast: every proven readout keeps at least ~5.2 ms between
+             * frames, which caps 976 rows at about 46.8 fps.  So read 958 rows (the 954-row
+             * frame still fits) and run 32 MHz / (0x208 * 0x502) = 48.00 fps.
+             * The vertical values are worked out from the neighbouring readouts.
+             * EXPERIMENTAL, not yet tried on a camera. */
+            if (Framerate_48 && a35_short_readout && is_EOSM)
+            {
+                RAW_V         = 0x3DB + reg_height;
+                TimerA        = 0x207;
+                TimerB        = 0x501;
+                Preview_V     = 958;
+                YUV_HD_S_V    = 0x1050165;
+            }
         }
         
         if (AR_2_1)
@@ -2542,6 +2568,16 @@ static inline uint32_t reg_override_3X3(uint32_t reg, uint32_t old_val)
             Preview_V     = 738;
             Preview_R     = 0x1D000E;
             YUV_HD_S_V    = 0x1050112;
+
+            /* 48 fps for the slim A35 2.35:1 frame (see update_patch): same line time as the
+             * 57 fps above, with a longer frame: 32 MHz / (0x208 * 0x502) = 48.00 fps.
+             * (A camera test with the slower line time, TimerA 0x20F / TimerB 0x4EE, showed the same
+             * streaks at 10-bit and slightly more at 12-bit, so the line time is not the cause.) */
+            if (Framerate_48 && is_EOSM)
+            {
+                TimerA        = 0x207;
+                TimerB        = 0x501;
+            }
         }
         
         if (AR_2_39_1 && crop_preset_fps_reduce == 1 && is_EOSM)
@@ -2605,10 +2641,12 @@ static inline uint32_t reg_override_3X3(uint32_t reg, uint32_t old_val)
             RAW_H         = 0x1D4 + reg_width;
             RAW_V         = 0x4A5 + reg_height;
         }
-        
+
         if (Framerate_24) {TimerA = 0x20F; TimerB = 0x9DE;}
         if (Framerate_25) {TimerA = 0x27F; TimerB = 0x7CF;}
         if (Framerate_30) {TimerA = 0x20F; TimerB = 0x7E4;}
+        /* 36 fps: 32 MHz / (0x210 * 0x694) = 35.99 fps.  TEST BUILD, not yet tried on a camera. */
+        if (Framerate_36) {TimerA = 0x20F; TimerB = 0x693;}
         
         Preview_H     = 1728;      // from mv1080 mode
         Preview_V     = 1152;      // from mv1080 mode
@@ -3735,6 +3773,9 @@ static void uninstall_patches()
         }
 }
 
+static int slim_crop_fps_mask(void);
+static int slim_film_frame_height(void);
+
 static void update_patch()
 {
     if (CROP_PRESET_MENU)
@@ -3747,9 +3788,32 @@ static void update_patch()
         /* 18 fps exists only in the 1:1 1280p preset; anywhere else fall back to 24 */
         if (crop_preset_fps == 3 && !(CROP_PRESET_MENU == CROP_PRESET_1X1 && crop_preset_1x1_res_menu == 4))
             crop_preset_fps = 0;
+        /* 36 / 48 fps exist only for the 3x3 3:2 (A35) readout, and only where the menu allows them */
+        if (crop_preset_fps >= 4 &&
+            !(CROP_PRESET_MENU == CROP_PRESET_3X3 && crop_preset_3x3_res_menu == 2 &&
+              (slim_crop_fps_mask() & (1 << crop_preset_fps))))
+            crop_preset_fps = 0;
         crop_preset_1x1_res = crop_preset_1x1_res_menu;
         crop_preset_1x3_res = crop_preset_1x3_res_menu;
         crop_preset_3x3_res = crop_preset_3x3_res_menu;
+
+        /* 48 fps: a full 1160-row readout cannot go that fast, so the A35 frames that fit
+         * in a shorter readout are read from one of the High FPS readouts instead.  The menu
+         * still shows the same A35 format; only the sensor readout underneath changes.
+         *   2.35:1 (722 rows)         -> 1736x738 readout (proven at 57 fps, run slower)
+         *   16:9 and 1.85:1 (954/916) -> 1736x958 readout (experimental) */
+        a35_short_readout = 0;
+        if (crop_preset_fps == 5)
+        {
+            crop_preset_3x3_res = 0;    /* High_FPS */
+            if (slim_film_frame_height() <= 738)
+                crop_preset_ar = 3;     /* 2.35:1, 1736x738 */
+            else
+            {
+                crop_preset_ar = 0;     /* 16:9 base, shortened to 958 rows in reg_override_3X3 */
+                a35_short_readout = 1;
+            }
+        }
 
         /* install our hooks, if we haven't already do so */
         if (!patch_active)
@@ -4797,12 +4861,66 @@ static void slim_crop_expected_res(int *w, int *h)
         else if (ar == 1) { *w = 1736; *h = 868; }
         else if (ar == 2) { *w = 1736; *h = 790; }
         else if (ar == 3) { *w = 1736; *h = 738; }
-        else { *w = 1736; *h = 1160; } /* 3:2 */
+        else
+        {
+            *w = 1736; *h = 1160;  /* 3:2 */
+            /* 48 fps reads a shorter readout instead: 738 rows (2.35:1) or 958 rows */
+            if (crop_preset_fps_menu == 5 && (slim_crop_fps_mask() & 0x20))
+                *h = slim_film_frame_height() <= 738 ? 738 : 958;
+        }
         return;
     }
 }
 
-/* Bit0=23.976 Bit1=25 Bit2=30 Bit3=18 (1:1 3:2 only) — rates allowed for current Mode/AR/Preset on EOS M.
+/* height of the recorded film frame (0 when the menu state is not a film format) */
+static int slim_film_frame_height(void)
+{
+    int fmt = slim_film_sync();
+    if (fmt < 0)
+        return 0;
+    return film_frames[film_frame_index(fmt, slim_film_frame_get(fmt))].h;
+}
+
+/* Sensor line time in 32 MHz clocks (TimerA + 1) of the readout that the menu state selects,
+ * 0 when unknown.  Only used for the Readout Speed row; keep it in step with the TimerA values
+ * in reg_override_1X1 / reg_override_3X3. */
+static int slim_line_clocks(void)
+{
+    switch (slim_film_menu_readout())
+    {
+        case FILM_RO_3X3:
+            if (crop_preset_fps_menu == 1) return 0x27F + 1;     /* 25 fps */
+            if (crop_preset_fps_menu == 5) return 0x207 + 1;     /* 48 fps (738 or 958 row readout) */
+            return 0x20F + 1;                                    /* 23.976 / 36 fps */
+        case FILM_RO_3K:   return 0x35B + 1;
+        case FILM_RO_1440: return 0x2DB + 1;
+        case FILM_RO_1280: return 0x235 + 1;
+        case FILM_RO_25K:  return 0x2CB + 1;
+    }
+    return 0;
+}
+
+/* Readout Speed: how long the sensor takes to scan the recorded height (rolling shutter), in
+ * tenths of a millisecond; 0 when unknown.  Calculated from the line time, not measured. */
+static int slim_readout_x10(void)
+{
+    int h = slim_film_frame_height();
+    int c = slim_line_clocks();
+    if (h <= 0 || c <= 0)
+        return 0;
+    return (h * c + 1600) / 3200;     /* rows * clocks / 32000 kHz = ms; x10 */
+}
+
+/* number of frame rates a mask offers */
+static int slim_fps_bits(int mask)
+{
+    int n = 0;
+    for (int i = 0; i < 6; i++)
+        n += (mask >> i) & 1;
+    return n;
+}
+
+/* Bit0=23.976 Bit1=25 Bit2=30 Bit3=18 (1:1 3:2 only) Bit4=36 Bit5=48 (3x3 3:2 only) — rates allowed for current Mode/AR/Preset on EOS M.
  * LV: return 0 (handled specially as 3 fps). */
 static int slim_crop_fps_mask(void)
 {
@@ -4833,7 +4951,16 @@ static int slim_crop_fps_mask(void)
     {
         int ar = COERCE(crop_preset_ar_menu, 0, 4);
         if (ar == 4)
-            return 0x1 | 0x2;       /* 3:2 (A35, A35 Anamorphic) → 23.976 / 25; no 30 in FILM */
+        {
+            /* 3:2 (A35, A35 Anamorphic) → 23.976 / 25 / 36; no 30 in FILM */
+            int mask = 0x1 | 0x2 | 0x10;
+            /* 48 only where the recorded frame fits in a shorter readout
+             * (A35 16:9, 1.85, 2.35; not the 1152-row anamorphic frames) */
+            int h = slim_film_frame_height();
+            if (h > 0 && h <= 958)
+                mask |= 0x20;
+            return mask;
+        }
         return 0; /* High FPS AR: single fixed rate (shown specially) */
     }
 
@@ -4847,7 +4974,7 @@ static void slim_crop_clamp_fps(void)
         return; /* LV @ 3 fps — no 24/25/30 index */
     if (mask & (1 << crop_preset_fps_menu))
         return;
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 6; i++)
     {
         if (mask & (1 << i))
         {
@@ -5016,8 +5143,12 @@ static MENU_UPDATE_FUNC(slim_crop_preset_update)
             {
                 int i = film_frame_index(film_fmt, slim_film_frame_get(film_fmt));
                 MENU_SET_VALUE("%dx%d", film_frames[i].w, film_frames[i].h);
+                /* Readout speed on the same row, like the shutter row shows angle and speed together */
+                int t = slim_readout_x10();
+                if (t > 0)
+                    MENU_SET_RINFO("%d.%d ms", t / 10, t % 10);
             }
-            MENU_SET_HELP("Size of the recorded picture (read-only).");
+            MENU_SET_HELP("Size of the recorded picture, and the time the sensor takes to read it out top to bottom (rolling shutter; lower is better). Calculated, not measured. Read-only.");
             MENU_SET_ENABLED(0);
             return;
         }
@@ -5170,17 +5301,17 @@ static MENU_SELECT_FUNC(slim_crop_fps_select)
         return; /* LV: 3 fps only */
 
     int mask = slim_crop_fps_mask();
-    int bits = (mask & 1) + ((mask >> 1) & 1) + ((mask >> 2) & 1) + ((mask >> 3) & 1);
+    int bits = slim_fps_bits(mask);
     if (bits <= 1)
         return;
 
-    /* order: 18 <-> 23.976 <-> 25 <-> 30 (index 3 is 18) */
-    static const int order[4] = { 3, 0, 1, 2 };
+    /* order: 18 <-> 23.976 <-> 25 <-> 30 <-> 36 <-> 48 (index 3 is 18, 4 is 36, 5 is 48) */
+    static const int order[6] = { 3, 0, 1, 2, 4, 5 };
     int pos = 0;
-    for (int k = 0; k < 4; k++) if (order[k] == crop_preset_fps_menu) pos = k;
-    for (int step = 0; step < 4; step++)
+    for (int k = 0; k < 6; k++) if (order[k] == crop_preset_fps_menu) pos = k;
+    for (int step = 0; step < 6; step++)
     {
-        pos = MOD(pos + (delta < 0 ? -1 : 1), 4);
+        pos = MOD(pos + (delta < 0 ? -1 : 1), 6);
         if (mask & (1 << order[pos]))
         {
             crop_preset_fps_menu = order[pos];
@@ -5232,15 +5363,15 @@ static MENU_UPDATE_FUNC(slim_crop_fps_update)
         return;
     }
 
-    static const char * labels[] = { "23.976", "25", "30", "18" };
+    static const char * labels[] = { "23.976", "25", "30", "18", "36", "48" };
     if (slim_video_standard() && crop_preset_fps_menu == 2)
         MENU_SET_VALUE("29.97");   /* VIDEO standard: 2.5K readout snapped to 29.97 */
     else
-        MENU_SET_VALUE("%s", labels[COERCE(crop_preset_fps_menu, 0, 3)]);
+        MENU_SET_VALUE("%s", labels[COERCE(crop_preset_fps_menu, 0, 5)]);
 
     /* Only one valid rate → show it greyed (read-only). */
     int mask = slim_crop_fps_mask();
-    int bits = (mask & 1) + ((mask >> 1) & 1) + ((mask >> 2) & 1) + ((mask >> 3) & 1);
+    int bits = slim_fps_bits(mask);
     if (bits <= 1)
         MENU_SET_ENABLED(0);
 }
@@ -5361,7 +5492,7 @@ int crop_rec_touch_get_value(int control, int slot, char *value, int size,
         else
         {
             int mask = slim_crop_fps_mask();
-            int bits = (mask & 1) + ((mask >> 1) & 1) + ((mask >> 2) & 1) + ((mask >> 3) & 1);
+            int bits = slim_fps_bits(mask);
             if (CROP_PRESET_MENU == CROP_PRESET_3X3 && crop_preset_ar_menu < 4)
             {
                 static const char *hfr[] = { "46.800", "50", "54", "55.6" };
@@ -5369,10 +5500,10 @@ int crop_rec_touch_get_value(int control, int slot, char *value, int size,
             }
             else
             {
-                static const char *labels[] = { "23.976", "25", "30", "18" };
+                static const char *labels[] = { "23.976", "25", "30", "18", "36", "48" };
                 snprintf(value, size, "%s",
                     (slim_video_standard() && crop_preset_fps_menu == 2) ? "29.97" :
-                    labels[COERCE(crop_preset_fps_menu, 0, 3)]);
+                    labels[COERCE(crop_preset_fps_menu, 0, 5)]);
             }
             enabled = bits > 1;
         }
@@ -5553,7 +5684,7 @@ static struct menu_entry crop_rec_menu_eosm[] =
         .choices    = CHOICES("10 Bit", "11 Bit", "12 Bit", "14 Bit"),
         .edit_mode  = EM_INLINE_ADJUST,
         .depends_on = DEP_LIVEVIEW | DEP_MOVIE_MODE,
-        .help       = "Lossless RAW bit depth. Always available.",
+        .help       = "Lossless RAW bit depth. 10 and 11 Bit can show a faint line pattern in deep shadows of the live preview while recording; it is much weaker in the recorded file.",
     },
 };
 
@@ -6996,22 +7127,85 @@ static unsigned int crop_rec_polling_cbr(unsigned int unused)
         }
 #endif
 
-        /* FILM standard: every session starts at a 172 degree shutter (once, a moment after Live View
-         * has settled; later changes by the user are left alone).  172 degrees is 1/50 s at 23.976 fps. */
+        /* FILM standard: the first boot (new build installed, settings wiped or clock reset, see
+         * shutter_init_build) starts at a 172 degree shutter, a moment after Live View has settled.
+         * After that the shutter the user left is kept across power cycles.  172 degrees is 1/50 s at 23.976 fps.
+         * The angle is worked out from the frame rate chosen in the menu.  The shutter that the sensor
+         * really uses is checked once a second, and set again if something has changed it since,
+         * until it has held for two checks (at most 20 s; it stops if the user changes the shutter). */
         {
-            static int slim_shutter_default_done = 0;
-            static int slim_shutter_default_t = 0;
-            if (!slim_shutter_default_done)
+            static int sd_done = 0, sd_t0 = 0, sd_first_raw = 0, sd_my_raw = 0, sd_last_try = 0, sd_held = 0;
+            static int sd_id = 0;
+            if (!sd_id && !sd_done)
+            {
+                /* decide once per boot whether this is a "first boot" */
+                const char *s = __DATE__ " " __TIME__;
+                int h = 5381;
+                for (; *s; s++)
+                    h = h * 33 + *s;
+                sd_id = h ? h : 1;
+
+                struct tm tm;
+                LoadCalendarFromRTC(&tm);
+                int today = (tm.tm_year * 12 + tm.tm_mon) * 31 + tm.tm_mday;
+                int first_boot = (shutter_init_build != sd_id) || (today < shutter_init_day);
+                shutter_init_day = today;
+                /* not a first boot: keep the shutter the user left (the shutter lock restores it) */
+                if (!first_boot)
+                    sd_done = 1;
+            }
+            if (!sd_done)
             {
                 int now = get_ms_clock();
-                if (!slim_shutter_default_t)
-                    slim_shutter_default_t = now;
-                else if (now - slim_shutter_default_t > 2000)
+                if (!sd_t0)
+                    sd_t0 = now;
+                else
                 {
-                    slim_shutter_default_done = 1;
-                    int fps_x1000 = fps_get_current_x1000();
-                    if (crop_rec_film_standard() && fps_x1000 > 0)
-                        lens_set_rawshutter(shutterf_to_raw(172.0f * 1000.0f / (360.0f * fps_x1000)));
+                    static const int menu_fps_x1000[6] = { 23976, 25000, 29970, 18000, 35990, 48000 };
+                    int fps_menu = menu_fps_x1000[COERCE(crop_preset_fps_menu, 0, 5)];
+                    int el = now - sd_t0;
+                    int want = 360 * fps_menu / 172;                       /* wanted shutter, 1/x (x1000) */
+                    int real = get_current_shutter_reciprocal_x1000();     /* what the sensor uses now */
+                    int std = crop_rec_film_standard();
+
+                    if (el > 2000 && el < 20000 && now - sd_last_try >= 1000)
+                    {
+                        sd_last_try = now;
+                        int cur = lens_info.raw_shutter;
+                        if (!sd_first_raw)
+                            sd_first_raw = cur;
+                        /* The shutter is now neither what it was at boot nor what we set: the user changed it. */
+                        if (sd_my_raw && cur != sd_my_raw && cur != sd_first_raw)
+                        {
+                            sd_done = 1;
+                            shutter_init_build = sd_id;     /* the user took over: no more defaults */
+                        }
+                        else if (std)
+                        {
+                            if (real > 0 && ABS(real - want) * 100 <= want * 15)
+                            {
+                                if (++sd_held >= 2)
+                                {
+                                    sd_done = 1;
+                                    shutter_init_build = sd_id;
+                                }
+                            }
+                            else
+                            {
+                                sd_held = 0;
+                                int raw = shutterf_to_raw(172.0f * 1000.0f / (360.0f * fps_menu));
+                                /* The EOS M always runs the shutter lock (movtweaks.c): it puts the shutter back to the
+                                 * value it held, within about half a second.  Tell it the new value first, otherwise it
+                                 * undoes this within half a second. */
+                                shutter_lock_accept(raw);
+                                sd_my_raw = raw;
+                                lens_set_rawshutter(raw);
+                            }
+                        }
+                    }
+
+                    if (el >= 20000)
+                        sd_done = 1;
                 }
             }
         }
@@ -7767,7 +7961,7 @@ static const struct setting_range crop_settings[] = {
     SETTING(crop_preset_1x1_res_menu,   0,       7,      3),
     SETTING(crop_preset_1x3_res_menu,   0,       3,      1),
     SETTING(crop_preset_3x3_res_menu,   0,       2,      2),
-    SETTING(crop_preset_fps_menu,       0,       3,      0),
+    SETTING(crop_preset_fps_menu,       0,       5,      0),
     SETTING(crop_preset_fps_reduce,     0,       1,      1),
     SETTING(slim_film_fmt,              0,       FILM_FORMAT_COUNT - 1, 0),
     SETTING(slim_film_frames,           0,       (1 << (2 * FILM_FORMAT_COUNT)) - 1, 0),
@@ -8014,6 +8208,8 @@ MODULE_CONFIGS_START()
     MODULE_CONFIG(INFO_button)
     MODULE_CONFIG(Shutter_zoom)
     MODULE_CONFIG(Shutter_rec)
+    MODULE_CONFIG(shutter_init_build)
+    MODULE_CONFIG(shutter_init_day)
     MODULE_CONFIG(tapdisp)
     MODULE_CONFIG(Arrows_L_R)
     MODULE_CONFIG(Arrows_U_D)
