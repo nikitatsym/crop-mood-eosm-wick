@@ -457,6 +457,7 @@ static GUARDED_BY(RawRecTask)   uint64_t mlv_start_timestamp = 0;
        GUARDED_BY(RawRecTask)   uint32_t raw_rec_trace_ctx = TRACE_ERROR;
 
 static int raw_rec_should_preview(void);
+static void kill_gd_bars_restore(void);
 static void lvrecov_log_state(void);
 
 /* old mlv_rec interface stuff here */
@@ -2517,6 +2518,7 @@ unsigned int raw_rec_polling_cbr(unsigned int unused)
         refresh_cropmarks_if_changed();
     }
     film_frame_settle_redraw();
+    kill_gd_bars_restore();
     
     /* update status messages */
     show_recording_status();
@@ -2584,6 +2586,41 @@ int mlv_raw_rec_busy()
     return !RAW_IS_IDLE;
 }
 
+/* Kill Global Draw: the Film Format frame is made of ML-drawn black bars and an edge line.
+ * With Global Draw killed nothing redraws them, so they are drawn here once at the start of
+ * the recording, and put back by kill_gd_bars_restore() if something wipes them. */
+static void draw_film_bars(void)
+{
+    int fx, fy, fw, fh;
+    if (film_frame_rect(&fx, &fy, &fw, &fh))
+    {
+        int x1 = COERCE(fx, 0, BMP_W_PLUS);
+        int y1 = COERCE(fy, 0, BMP_H_PLUS);
+        int x2 = COERCE(fx + fw, 0, BMP_W_PLUS);
+        int y2 = COERCE(fy + fh, 0, BMP_H_PLUS);
+        bmp_fill(COLOR_BLACK, 0, 0, BMP_W_PLUS, y1);                          /* top    */
+        bmp_fill(COLOR_BLACK, 0, y2, BMP_W_PLUS, BMP_H_PLUS - y2);            /* bottom */
+        bmp_fill(COLOR_BLACK, 0, y1, x1, y2 - y1);                            /* left   */
+        bmp_fill(COLOR_BLACK, x2, y1, BMP_W_PLUS - x2, y2 - y1);              /* right  */
+        bmp_draw_rect(COLOR_GRAY(70), x1, y1, x2 - x1, y2 - y1);              /* edge   */
+    }
+}
+
+/* While recording with Kill Global Draw on: twice a second, look at one pixel inside a bar and,
+ * only if the bars are gone, draw them again.  Costs one pixel read when nothing is wrong. */
+static void kill_gd_bars_restore(void)
+{
+    static int last = 0;
+    if (!kill_gd || !RAW_IS_RECORDING)
+        return;
+    int now = get_ms_clock();
+    if (now - last < 500)
+        return;
+    last = now;
+    if (film_bars_missing())
+        draw_film_bars();
+}
+
 static REQUIRES(RawRecTask)
 void hack_liveview(int unhack)
 {
@@ -2600,19 +2637,7 @@ void hack_liveview(int unhack)
             clrscr();
             gd_was_killed = 1;
 
-            int fx, fy, fw, fh;
-            if (film_frame_rect(&fx, &fy, &fw, &fh))
-            {
-                int x1 = COERCE(fx, 0, BMP_W_PLUS);
-                int y1 = COERCE(fy, 0, BMP_H_PLUS);
-                int x2 = COERCE(fx + fw, 0, BMP_W_PLUS);
-                int y2 = COERCE(fy + fh, 0, BMP_H_PLUS);
-                bmp_fill(COLOR_BLACK, 0, 0, BMP_W_PLUS, y1);                          /* top    */
-                bmp_fill(COLOR_BLACK, 0, y2, BMP_W_PLUS, BMP_H_PLUS - y2);            /* bottom */
-                bmp_fill(COLOR_BLACK, 0, y1, x1, y2 - y1);                            /* left   */
-                bmp_fill(COLOR_BLACK, x2, y1, BMP_W_PLUS - x2, y2 - y1);              /* right  */
-                bmp_draw_rect(COLOR_GRAY(70), x1, y1, x2 - x1, y2 - y1);              /* edge   */
-            }
+            draw_film_bars();
         }
         else if (gd_was_killed)
         {
