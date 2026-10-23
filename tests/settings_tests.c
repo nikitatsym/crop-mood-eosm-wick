@@ -15,7 +15,7 @@ static int failures = 0, checks = 0;
 static int fps_over = 0, tapdisp = 1, crop_preset_fps_reduce = 1, crop_preset_index = 3, shutter_range = 0,
            fix_dual_iso_flicker = 1, bit_depth_analog = 1, brighten_lv_method = 0, crop_preset_ar_menu = 4,
            crop_preset_1x1_res_menu = 3, crop_preset_1x3_res_menu = 1, crop_preset_3x3_res_menu = 2,
-           crop_preset_fps_menu = 0, SET_button = 1, Half_Shutter = 2, INFO_button = 6, Shutter_zoom = 0, Shutter_rec = 0,
+           crop_preset_fps_menu = 0, SET_button = 1, Half_Shutter = 2, INFO_button = 6, Shutter_rec = 0,
            Arrows_U_D = 3, more_hacks = 1, Arrows_L_R = 2, crop_settings_ver = 0, slim_film_fmt = 0, slim_film_frames = 0;
 
 /* ---- real code from crop_rec.c ---- */
@@ -26,7 +26,7 @@ static void reset_defaults(void)
     fps_over = 0; tapdisp = 1; crop_preset_fps_reduce = 1; crop_preset_index = 3; shutter_range = 0;
     fix_dual_iso_flicker = 1; bit_depth_analog = 1; brighten_lv_method = 0; crop_preset_ar_menu = 4;
     crop_preset_1x1_res_menu = 3; crop_preset_1x3_res_menu = 1; crop_preset_3x3_res_menu = 2;
-    crop_preset_fps_menu = 0; SET_button = 1; Half_Shutter = 2; INFO_button = 6; Shutter_zoom = 0; Shutter_rec = 0;
+    crop_preset_fps_menu = 0; SET_button = 1; Half_Shutter = 2; INFO_button = 6; Shutter_rec = 0;
     Arrows_U_D = 3; more_hacks = 1; Arrows_L_R = 2; crop_settings_ver = CROP_SETTINGS_VERSION; slim_film_fmt = 0; slim_film_frames = 0;
 }
 
@@ -103,7 +103,7 @@ int main(void)
         int expect = (v == 5) ? 0 : v;
         if (expect == 0) expect = 6;                 /* OFF: Quick Panel since version 5 */
         CHECK(INFO_button == expect, "v3 INFO %d -> %d, expected %d", v, INFO_button, expect);
-        CHECK(Shutter_rec == 1, "v3 Shutter record must stay on");
+        CHECK(Shutter_rec == 1, "v3 Half-Shutter Record must stay on");
     }
 
     /* --- version 4 config (no INFO default yet): OFF becomes Quick Panel once, other choices stay --- */
@@ -122,7 +122,7 @@ int main(void)
         reset_defaults(); crop_settings_ver = CROP_SETTINGS_VERSION; INFO_button = v; Shutter_rec = 1;
         crop_settings_load();
         CHECK(INFO_button == (v == 5 ? 0 : v), "v%d INFO %d -> %d", CROP_SETTINGS_VERSION, v, INFO_button);
-        CHECK(Shutter_rec == 1, "current Shutter record must stay on");
+        CHECK(Shutter_rec == 1, "current Half-Shutter Record must stay on");
         int after = INFO_button;
         crop_settings_load();
         CHECK(INFO_button == after && crop_settings_ver == CROP_SETTINGS_VERSION, "second load must change nothing");
@@ -142,22 +142,22 @@ int main(void)
     reset_defaults(); crop_settings_ver = 3;
     crop_preset_index = 9; crop_preset_1x1_res_menu = 99; crop_preset_3x3_res_menu = -4; crop_preset_ar_menu = 5;
     crop_preset_fps_menu = 12; bit_depth_analog = -2; fps_over = 2000000000; SET_button = 0; Arrows_U_D = 7;
-    INFO_button = 40; slim_film_fmt = 13; slim_film_frames = -1; Shutter_zoom = 3; shutter_range = 2; tapdisp = 6;
+    INFO_button = 40; slim_film_fmt = 13; slim_film_frames = -1; shutter_range = 2; tapdisp = 6;
     crop_settings_load();
     CHECK(crop_preset_index == 1, "crop_preset_index reset to 1, got %d", crop_preset_index);
     CHECK(crop_preset_1x1_res_menu == 3 && crop_preset_3x3_res_menu == 2 && crop_preset_ar_menu == 4 && crop_preset_fps_menu == 0, "preset menus reset to defaults");
     CHECK(bit_depth_analog == 1 && fps_over == 0 && SET_button == 1 && Arrows_U_D == 3 && INFO_button == 6, "other values reset (INFO back to Quick Panel)");
-    CHECK(slim_film_fmt == 0 && slim_film_frames == 0 && Shutter_zoom == 0 && shutter_range == 0 && tapdisp == 1, "film format / misc reset");
+    CHECK(slim_film_fmt == 0 && slim_film_frames == 0 && shutter_range == 0 && tapdisp == 1, "film format / misc reset");
 
     /* --- legitimate values from every menu survive --- */
     reset_defaults(); crop_settings_ver = 3;
     crop_preset_index = 2; crop_preset_1x1_res_menu = 7; crop_preset_1x3_res_menu = 3; crop_preset_3x3_res_menu = 0;
     crop_preset_ar_menu = 0; crop_preset_fps_menu = 3; bit_depth_analog = 3; fps_over = -100000; SET_button = 2;
-    Arrows_U_D = 0; INFO_button = 6; slim_film_fmt = 11; slim_film_frames = 0xFFFFFF; Shutter_zoom = 2; tapdisp = 5;
+    Arrows_U_D = 0; INFO_button = 6; slim_film_fmt = 11; slim_film_frames = 0xFFFFFF; tapdisp = 5;
     crop_settings_load();
     CHECK(crop_preset_index == 2 && crop_preset_1x1_res_menu == 7 && crop_preset_1x3_res_menu == 3 && crop_preset_3x3_res_menu == 0 &&
           crop_preset_ar_menu == 0 && crop_preset_fps_menu == 3 && bit_depth_analog == 3 && fps_over == -100000 && SET_button == 2 &&
-          Arrows_U_D == 0 && INFO_button == 6 && slim_film_fmt == 11 && slim_film_frames == 0xFFFFFF && Shutter_zoom == 2 && tapdisp == 5,
+          Arrows_U_D == 0 && INFO_button == 6 && slim_film_fmt == 11 && slim_film_frames == 0xFFFFFF && tapdisp == 5,
           "values at the edge of their ranges must be kept");
 
     /* --- Frame choice per Film Format (2 bits each, saved in one number) --- */

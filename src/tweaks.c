@@ -3523,8 +3523,8 @@ void anamorphic_preview_add_slim_menu(void)
     }
 
     /* The core adds the row unconditionally. crop_rec calls this again after
-     * adding Shutter zoom, which gives us the exact requested ordering. */
-    menu_move_entry_after("Settings", "Anamorphic", "Shutter zoom");
+     * adding Half-Shutter Record, which gives us the exact requested ordering. */
+    menu_move_entry_after("Settings", "Anamorphic", "Half-Shutter Record");
 }
 #else
 void anamorphic_preview_set_toggle(void) {}
