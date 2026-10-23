@@ -555,6 +555,18 @@ static int waveform_touch_expanded;
 static int waveform_touch_x, waveform_touch_y, waveform_touch_w, waveform_touch_h;
 static uint32_t waveform_clip_r, waveform_clip_g, waveform_clip_b, waveform_clip_total;
 
+/* After a graph resize, the cleared area can hold part of the white video frame (crop marks),
+ * and the clear also wipes the saved copy of them: mark the saved copy invalid and rebuild the
+ * frame right now (fast, it only redraws the crop marks - never the generic redraw, which
+ * temporarily exposes Canon).  If that cannot run right now (menu open etc.), the normal
+ * crop mark poll does it a moment later. */
+static void monitoring_graph_restore_frame(void)
+{
+    cropmark_cache_dirty = 1;
+    crop_set_dirty(2);      /* fallback; the redraw below resets it when it runs */
+    cropmark_redraw();
+}
+
 int monitoring_graph_touch_toggle(int x, int y)
 {
     if (histogram_touch_toggle_at(x, y))
@@ -564,8 +576,7 @@ int monitoring_graph_touch_toggle(int x, int y)
          * to redraw its dialog/front buffer.  The cleared area can also hold part of
          * the white video frame (crop marks), and that clear also wipes the saved copy of
          * the crop marks: mark the saved copy invalid so they are rebuilt, not just re-copied. */
-        cropmark_cache_dirty = 1;
-        crop_set_dirty(2);
+        monitoring_graph_restore_frame();
         return 1;
     }
 
@@ -585,8 +596,7 @@ int monitoring_graph_touch_toggle(int x, int y)
      * Never call the generic redraw path here: it temporarily exposes Canon.
      * The cleared area can hold part of the white video frame, and the clear also wipes the
      * saved copy of the crop marks: invalidate it so they are rebuilt. */
-    cropmark_cache_dirty = 1;
-    crop_set_dirty(2);
+    monitoring_graph_restore_frame();
     return 1;
 }
 

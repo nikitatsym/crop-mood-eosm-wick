@@ -685,7 +685,8 @@ static int film_frame_possible(void)
     return crop_rec_film_format() > 0 &&
            (lv_dispsize == 1 || lv_dispsize == 5) &&
            squeeze_factor == 1.0f &&
-           (is_LCD_Output() || is_480p_Output() || is_1080i_Full_Output() || is_1080i_Info_Output());
+           (is_LCD_Output() || is_480p_Output() || is_1080i_Full_Output() || is_1080i_Info_Output() ||
+            ext_monitor_hdmi /* any other HDMI mode (720p ...): generic placement, not measured */);
 }
 
 static int film_frame_rect(int * x, int * y, int * w, int * h)
@@ -819,7 +820,8 @@ static void refresh_cropmarks_if_changed(void)
             | (crop_rec_film_format() << 6)
             | (raw_video_enabled ? 1 << 12 : 0)
             | ((is_LCD_Output() ? 1 : 0) << 13)
-            | ((is_480p_Output() ? 1 : 0) << 14);
+            | ((is_480p_Output() ? 1 : 0) << 14)
+            | ((ext_monitor_hdmi ? 1 : 0) << 11);
     sig ^= (res_x * 7 + res_y * 13 + skip_x * 17 + skip_y * 19) << 15;
 
     if (sig != last_sig)
@@ -836,10 +838,6 @@ static void refresh_cropmarks_if_changed(void)
 static int film_bars_missing(void)
 {
     int x, y, w, h;
-
-    /* the pixel positions are only known for the camera LCD */
-    if (!is_LCD_Output())
-        return 0;
 
     if (!film_frame_rect(&x, &y, &w, &h))
         return 0;
