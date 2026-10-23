@@ -18,13 +18,14 @@ static unsigned dg_isqrt(unsigned v)
     return r;
 }
 
-/* High-pass of a[0..n-1] (values are luma x16): each element minus the mean of its 3 left and 3
+/* High-pass of a[0..n-1] (values are luma x256): each element minus the mean of its 3 left and 3
  * right neighbours.  Returns the rms and the largest absolute deviation, both in luma x100. */
 static void dg_hp_stats(const int *a, int n, int *rms_x100, int *max_x100)
 {
     *rms_x100 = 0; *max_x100 = 0;
     if (n < 8) return;
-    unsigned sum = 0, mx = 0;
+    float sum = 0;
+    unsigned mx = 0;
     int cnt = 0;
     for (int i = 3; i < n - 3; i++)
     {
@@ -32,11 +33,12 @@ static void dg_hp_stats(const int *a, int n, int *rms_x100, int *max_x100)
         int hp = a[i] - nb / 6;
         unsigned ah = hp < 0 ? -hp : hp;
         if (ah > mx) mx = ah;
-        sum += (ah * ah) >> 4;      /* ah <= 4080: ah*ah <= 16.6M; >>4 keeps 1000 terms below 2^32 */
+        sum += (float)hp * (float)hp;
         cnt++;
     }
-    *rms_x100 = (int)(dg_isqrt(sum / cnt * 16) * 100 / 16);
-    *max_x100 = (int)(mx * 100 / 16);
+    float lvl2 = sum / (float)cnt / 65536.0f;               /* luma levels squared */
+    *rms_x100 = (int)dg_isqrt((unsigned)(lvl2 * 10000.0f));  /* sqrt(levels^2 * 10^4) = levels x100 */
+    *max_x100 = (int)(mx * 100 / 256);
 }
 
 struct dg_streaks
@@ -83,8 +85,8 @@ static void dg_streak_measure(const uint8_t *vram, int width, int pitch, int hei
             total += v;
         }
     }
-    for (int x = 0; x < nc; x++) colbuf[x] = colbuf[x] * 16 / nrs;
-    for (int y = 0; y < nr; y++) rowbuf[y] = rowbuf[y] * 16 / ncs;
+    for (int x = 0; x < nc; x++) colbuf[x] = colbuf[x] * 256 / nrs;
+    for (int y = 0; y < nr; y++) rowbuf[y] = rowbuf[y] * 256 / ncs;
 
     out->ncols = nc; out->nrows = nr;
     out->mean_x100 = (int)((total * 100u) / ((unsigned)nr * ncs));

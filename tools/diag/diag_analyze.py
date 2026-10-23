@@ -108,7 +108,7 @@ def report_log(path):
         p('  take %d: %.1fs to %s  (%d second-lines)' % (i, s['start'], '%.1fs' % s['stop'] if s['stop'] else '?', len(R)))
         p('    ' + s['stoptext'])
         if R:
-            p('    live-view fps (min/avg/max):      %s' % fmt3(stats([num(r, 'vs_fps') for r in R]), '%.2f'))
+            p('    live-view fps (min/avg/max):      %s' % fmt3(stats([num(r, 'vs_fps') for r in R if num(r, 'vs_fps', 0) > 1]), '%.2f'))
             p('    vsync gap us, worst (max):         %d' % max(num(r, 'max', 0) for r in R))
             p('    poll gap ms, worst:                %d' % max(num(r, 'poll_gap_ms', 0) for r in R))
             p('    write speed MB/s (min/avg/max):    %s' % fmt3(stats([num(r, 'wr_speed') for r in R]), '%.1f'))
@@ -196,7 +196,22 @@ def load_dng(path):
         if int(comp) not in (1,):
             raise SystemExit('%s: compressed DNG (compression %s). Export the clip as UNCOMPRESSED DNG '
                              '(MLV App / mlv_dump -o x_ --dng without --compression).' % (path, comp))
-        img = page.asarray().astype(np.float64)
+        bps = page.bitspersample
+        if bps in (8, 16):
+            img = page.asarray().astype(np.float64)
+        else:
+            # packed 10/12/14-bit samples (what ML's uncompressed DNG export uses): unpack MSB-first
+            fh = tf.filehandle
+            chunks = []
+            for off, cnt in zip(page.dataoffsets, page.databytecounts):
+                fh.seek(off)
+                chunks.append(fh.read(cnt))
+            raw = np.frombuffer(b''.join(chunks), dtype=np.uint8)
+            h, w = page.imagelength, page.imagewidth
+            nbits = h * w * bps
+            bits = np.unpackbits(raw)[:nbits].reshape(-1, bps)
+            weights = (1 << np.arange(bps - 1, -1, -1)).astype(np.uint32)
+            img = (bits.astype(np.uint32) * weights).sum(axis=1).reshape(h, w).astype(np.float64)
         black = 0.0
         t = page.tags.get('BlackLevel')
         if t is not None:

@@ -48,6 +48,7 @@ static volatile int dg_vs_gap_max = 0;
 static volatile int dg_vs_total = 0;
 static volatile uint64_t dg_vs_last_us = 0;
 
+/* Canon's vsnprintf: use only %d %s %X.  "%u" prints a letter, "%%" swallows an argument. */
 /* the line time stamps are ms since boot */
 static void dg_printf(const char *fmt, ...)
 {
@@ -147,10 +148,10 @@ static void dg_log_config(const char *tag)
         (int)crop_preset_1x1_res, (int)crop_preset_ar, (int)crop_preset_fps, (int)bit_depth_analog,
         (int)brighten_lv_method, (int)a35_short_readout, (int)lv_dispsize, dg_output_type(), (int)lv,
         (int)RECORDING, mv[14]);
-    dg_printf("C %s timerA_set=%u timerB_set=%u timerA_reg=%d timerB_reg=%d fps_x1000=%d readout_x10ms=%d "
-              "raw=%ux%u preview=%ux%u\n",
-        tag, TimerA, TimerB, ta, tb, fps_get_current_x1000(), slim_readout_x10(),
-        (unsigned)RAW_H, (unsigned)RAW_V, (unsigned)Preview_H, (unsigned)Preview_V);
+    dg_printf("C %s timerA_set=%d timerB_set=%d timerA_reg=%d timerB_reg=%d fps_x1000=%d readout_x10ms=%d "
+              "raw=%dx%d preview=%dx%d\n",
+        tag, (int)TimerA, (int)TimerB, ta, tb, fps_get_current_x1000(), slim_readout_x10(),
+        (int)RAW_H, (int)RAW_V, (int)Preview_H, (int)Preview_V);
     dg_printf("C %s iso=%d iso_analog_raw=%d shutter_raw=%d shutter_ms_x10=%d aperture=%d wb=%d kelvin=%d "
               "picstyle=%d lens=\"%s\" focal=%d lens_id=%d\n",
         tag, lens_info.iso, lens_info.iso_analog_raw, lens_info.raw_shutter,
@@ -349,7 +350,7 @@ static void dg_tick(void)
         mlv_lite_diag_get(mv);
         int dfr = mv[1] - fr_last; fr_last = mv[1];
         dg_printf("R rec=%d vs_fps=%d.%02d vsync_gap_us min=%d max=%d poll_gap_ms=%d | frames=%d (+%d) skipped=%d "
-                  "buf_full=%d free_slots=%d/%d queue=%d wr_speed=%d.%02dMB/s comp=%d%% written_mb=%d wr_ms=%d idle_ms=%d | "
+                  "buf_full=%d free_slots=%d/%d queue=%d wr_speed=%d.%02dMB/s comp_pct=%d written_mb=%d wr_ms=%d idle_ms=%d | "
                   "mem_free=%d temp=%d bat_bars=%d card_free_32k=%d adtg_calls=%d cmos_calls=%d\n",
             rec, vfps / 100, vfps % 100,
             dg_vs_gap_min == 0x7FFFFFFF ? 0 : dg_vs_gap_min, dg_vs_gap_max, poll_gap_max,
