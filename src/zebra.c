@@ -561,7 +561,9 @@ int monitoring_graph_touch_toggle(int x, int y)
     {
         /* histogram_touch_toggle_at already clears the previous footprint.
          * The normal overlay task will draw the new size without asking Canon
-         * to redraw its dialog/front buffer. */
+         * to redraw its dialog/front buffer.  The cleared area can also hold part of
+         * the white video frame (crop marks): have the crop marks redrawn too. */
+        crop_set_dirty(cropmark_cache_is_valid() ? 2 : 10);
         return 1;
     }
 
@@ -578,7 +580,9 @@ int monitoring_graph_touch_toggle(int x, int y)
                                   waveform_touch_h + 2);
     waveform_touch_expanded = !waveform_touch_expanded;
     /* The normal overlay task redraws this at its next monitoring refresh.
-     * Never call the generic redraw path here: it temporarily exposes Canon. */
+     * Never call the generic redraw path here: it temporarily exposes Canon.
+     * The cleared area can hold part of the white video frame: redraw the crop marks. */
+    crop_set_dirty(cropmark_cache_is_valid() ? 2 : 10);
     return 1;
 }
 

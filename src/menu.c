@@ -1455,7 +1455,6 @@ menu_update_placeholder(struct menu * menu, struct menu_entry * new_entry)
              * They keep working with their saved values; they just aren't shown. */
             if (streq(new_entry->name, "HDMI Output") ||
                 streq(new_entry->name, "HDMI Resolution") ||
-                streq(new_entry->name, "SD Access Mode") ||
                 streq(new_entry->name, "Small Hacks") ||
                 streq(new_entry->name, "More Hacks") ||
                 streq(new_entry->name, "Card Benchmark"))
