@@ -2592,15 +2592,17 @@ static void draw_film_bars(void)
     int fx, fy, fw, fh;
     if (film_frame_rect(&fx, &fy, &fw, &fh))
     {
-        int x1 = COERCE(fx, 0, BMP_W_PLUS);
-        int y1 = COERCE(fy, 0, BMP_H_PLUS);
-        int x2 = COERCE(fx + fw, 0, BMP_W_PLUS);
-        int y2 = COERCE(fy + fh, 0, BMP_H_PLUS);
-        bmp_fill(COLOR_BLACK, 0, 0, BMP_W_PLUS, y1);                          /* top    */
-        bmp_fill(COLOR_BLACK, 0, y2, BMP_W_PLUS, BMP_H_PLUS - y2);            /* bottom */
-        bmp_fill(COLOR_BLACK, 0, y1, x1, y2 - y1);                            /* left   */
-        bmp_fill(COLOR_BLACK, x2, y1, BMP_W_PLUS - x2, y2 - y1);              /* right  */
-        bmp_draw_rect(COLOR_GRAY(70), x1, y1, x2 - x1, y2 - y1);              /* edge   */
+        /* on HDMI the bitmap has a margin left of / above x=0,y=0 (BMP_W_MINUS, BMP_H_MINUS) that is
+         * visible on the monitor: the bars must cover it too, or the picture shows through there */
+        int x1 = COERCE(fx, BMP_W_MINUS, BMP_W_PLUS);
+        int y1 = COERCE(fy, BMP_H_MINUS, BMP_H_PLUS);
+        int x2 = COERCE(fx + fw, BMP_W_MINUS, BMP_W_PLUS);
+        int y2 = COERCE(fy + fh, BMP_H_MINUS, BMP_H_PLUS);
+        bmp_fill(COLOR_BLACK, BMP_W_MINUS, BMP_H_MINUS, BMP_W_PLUS - BMP_W_MINUS, y1 - BMP_H_MINUS);   /* top    */
+        bmp_fill(COLOR_BLACK, BMP_W_MINUS, y2, BMP_W_PLUS - BMP_W_MINUS, BMP_H_PLUS - y2);             /* bottom */
+        bmp_fill(COLOR_BLACK, BMP_W_MINUS, y1, x1 - BMP_W_MINUS, y2 - y1);                             /* left   */
+        bmp_fill(COLOR_BLACK, x2, y1, BMP_W_PLUS - x2, y2 - y1);                                       /* right  */
+        bmp_draw_rect(COLOR_GRAY(70), x1, y1, x2 - x1, y2 - y1);                                       /* edge   */
     }
 }
 
