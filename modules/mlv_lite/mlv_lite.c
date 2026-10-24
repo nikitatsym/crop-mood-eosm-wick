@@ -710,11 +710,17 @@ static int film_frame_rect(int * x, int * y, int * w, int * h)
     return 1;
 }
 
+/* The frame refresh_cropmarks() last handed to the crop marks (same clamping), kept so Kill Global Draw
+ * can draw the same black bars when the picture is not a Film Format one (anamorphic, other presets) */
+static int cm_valid = 0;
+static int cm_x, cm_y, cm_w, cm_h;
+
 static void refresh_cropmarks()
 {
     if ((lv_dispsize > 1 && !crop_rec_cropmarks() && !film_frame_possible()) || lv_dispsize > 5 || raw_rec_should_preview() || !raw_video_enabled)
     {
         reset_movie_cropmarks();
+        cm_valid = 0;
     }
     else
     {
@@ -755,6 +761,12 @@ static void refresh_cropmarks()
         film_frame_rect(&x, &y, &w, &h);
 
         set_movie_cropmarks(x, y, w, h);
+
+        cm_x = COERCE(x, os.x0 + 1, os.x_max - 1);
+        cm_y = COERCE(y, os.y0 + 2, os.y_max - 2);
+        cm_w = COERCE(w, 0, os.x_max - 2 - cm_x);
+        cm_h = COERCE(h, 0, os.y_max - 4 - cm_y);
+        cm_valid = 1;
     }
 }
 
@@ -831,6 +843,18 @@ static void refresh_cropmarks_if_changed(void)
     }
 }
 
+/* The frame Kill Global Draw keeps on screen: the Film Format frame, or else whatever frame the crop
+ * marks were showing (e.g. anamorphic modes) */
+static int kill_gd_frame_rect(int * x, int * y, int * w, int * h)
+{
+    if (film_frame_rect(x, y, w, h))
+        return 1;
+    if (!cm_valid)
+        return 0;
+    *x = cm_x; *y = cm_y; *w = cm_w; *h = cm_h;
+    return 1;
+}
+
 /* Safety net: the Film Format bars can be wiped by Canon after boot (zoom x1/x5 switching).
  * Once Live View has been stable for a moment, check one pixel inside a bar; only if it is
  * not there do the same full redraw that closing a menu does, once.  Opening any menu counts
@@ -839,7 +863,7 @@ static int film_bars_missing(void)
 {
     int x, y, w, h;
 
-    if (!film_frame_rect(&x, &y, &w, &h))
+    if (!kill_gd_frame_rect(&x, &y, &w, &h))
         return 0;
 
     if (x >= 8)
@@ -2590,7 +2614,7 @@ int mlv_raw_rec_busy()
 static void draw_film_bars(void)
 {
     int fx, fy, fw, fh;
-    if (film_frame_rect(&fx, &fy, &fw, &fh))
+    if (kill_gd_frame_rect(&fx, &fy, &fw, &fh))
     {
         /* on HDMI the bitmap has a margin left of / above x=0,y=0 (BMP_W_MINUS, BMP_H_MINUS) that is
          * visible on the monitor: the bars must cover it too, or the picture shows through there */
