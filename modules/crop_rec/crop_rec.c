@@ -8100,7 +8100,6 @@ static unsigned int crop_rec_init()
         menu_add("Movie", crop_rec_menu_eosm, COUNT(crop_rec_menu_eosm));
         menu_add("Expo", expo_shutter_range_eosm, COUNT(expo_shutter_range_eosm));
         menu_add("Settings", slim_info_button_menu, COUNT(slim_info_button_menu));
-        anamorphic_preview_add_slim_menu();
         menu_add("Settings", slim_more_hacks_menu, COUNT(slim_more_hacks_menu));
         lvinfo_add_items(info_items, COUNT(info_items));
         return 0;
