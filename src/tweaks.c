@@ -3518,7 +3518,7 @@ void anamorphic_preview_add_slim_menu(void)
     if (!added)
     {
         slim_anamorphic_migrate_config();
-        /* Monitoring page ("Overlay"), after B&W Preview: called from zebra_init() once the
+        /* Monitoring page ("Overlay"), right after Cropmarks: called from zebra_init() once the
          * "Anamorphic" placeholder in zebra_menus[] exists. */
         menu_add("Overlay", slim_anamorphic_menu, COUNT(slim_anamorphic_menu));
         added = 1;

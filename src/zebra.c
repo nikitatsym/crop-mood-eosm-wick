@@ -3644,8 +3644,8 @@ struct menu_entry zebra_menus[] = {
     MENU_PLACEHOLDER("Cropmarks"),
     #endif
     #ifdef CONFIG_SLIM_MENUS
-    MENU_PLACEHOLDER("B&W Preview"),
     MENU_PLACEHOLDER("Anamorphic"),
+    MENU_PLACEHOLDER("B&W Preview"),
     #endif
     #ifdef FEATURE_FOCUS_PEAK
 #ifdef CONFIG_SLIM_MENUS
@@ -5253,7 +5253,7 @@ static void zebra_init()
     #ifdef CONFIG_SLIM_MENUS
     bw_preview_add_slim_menu();     /* fills the "B&W Preview" placeholder, after Cropmarks */
     #ifdef FEATURE_ANAMORPHIC_PREVIEW
-    anamorphic_preview_add_slim_menu(); /* fills the "Anamorphic" placeholder, after B&W Preview */
+    anamorphic_preview_add_slim_menu(); /* fills the "Anamorphic" placeholder, right after Cropmarks */
     #endif
     #endif
 }
