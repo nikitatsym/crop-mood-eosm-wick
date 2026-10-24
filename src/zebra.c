@@ -555,13 +555,28 @@ static int waveform_touch_expanded;
 static int waveform_touch_x, waveform_touch_y, waveform_touch_w, waveform_touch_h;
 static uint32_t waveform_clip_r, waveform_clip_g, waveform_clip_b, waveform_clip_total;
 
+/* After a graph resize, the cleared area can hold part of the white video frame (crop marks),
+ * and the clear also wipes the saved copy of them: mark the saved copy invalid and rebuild the
+ * frame right now (fast, it only redraws the crop marks - never the generic redraw, which
+ * temporarily exposes Canon).  If that cannot run right now (menu open etc.), the normal
+ * crop mark poll does it a moment later. */
+static void monitoring_graph_restore_frame(void)
+{
+    cropmark_cache_dirty = 1;
+    crop_set_dirty(2);      /* fallback; the redraw below resets it when it runs */
+    cropmark_redraw();
+}
+
 int monitoring_graph_touch_toggle(int x, int y)
 {
     if (histogram_touch_toggle_at(x, y))
     {
         /* histogram_touch_toggle_at already clears the previous footprint.
          * The normal overlay task will draw the new size without asking Canon
-         * to redraw its dialog/front buffer. */
+         * to redraw its dialog/front buffer.  The cleared area can also hold part of
+         * the white video frame (crop marks), and that clear also wipes the saved copy of
+         * the crop marks: mark the saved copy invalid so they are rebuilt, not just re-copied. */
+        monitoring_graph_restore_frame();
         return 1;
     }
 
@@ -578,7 +593,10 @@ int monitoring_graph_touch_toggle(int x, int y)
                                   waveform_touch_h + 2);
     waveform_touch_expanded = !waveform_touch_expanded;
     /* The normal overlay task redraws this at its next monitoring refresh.
-     * Never call the generic redraw path here: it temporarily exposes Canon. */
+     * Never call the generic redraw path here: it temporarily exposes Canon.
+     * The cleared area can hold part of the white video frame, and the clear also wipes the
+     * saved copy of the crop marks: invalidate it so they are rebuilt. */
+    monitoring_graph_restore_frame();
     return 1;
 }
 
@@ -3626,6 +3644,7 @@ struct menu_entry zebra_menus[] = {
     MENU_PLACEHOLDER("Cropmarks"),
     #endif
     #ifdef CONFIG_SLIM_MENUS
+    MENU_PLACEHOLDER("Anamorphic"),
     MENU_PLACEHOLDER("B&W Preview"),
     #endif
     #ifdef FEATURE_FOCUS_PEAK
@@ -5233,6 +5252,9 @@ static void zebra_init()
     #endif
     #ifdef CONFIG_SLIM_MENUS
     bw_preview_add_slim_menu();     /* fills the "B&W Preview" placeholder, after Cropmarks */
+    #ifdef FEATURE_ANAMORPHIC_PREVIEW
+    anamorphic_preview_add_slim_menu(); /* fills the "Anamorphic" placeholder, right after Cropmarks */
+    #endif
     #endif
 }
 

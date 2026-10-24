@@ -457,6 +457,7 @@ static GUARDED_BY(RawRecTask)   uint64_t mlv_start_timestamp = 0;
        GUARDED_BY(RawRecTask)   uint32_t raw_rec_trace_ctx = TRACE_ERROR;
 
 static int raw_rec_should_preview(void);
+static void kill_gd_bars_restore(void);
 static void lvrecov_log_state(void);
 
 /* old mlv_rec interface stuff here */
@@ -684,7 +685,8 @@ static int film_frame_possible(void)
     return crop_rec_film_format() > 0 &&
            (lv_dispsize == 1 || lv_dispsize == 5) &&
            squeeze_factor == 1.0f &&
-           (is_LCD_Output() || is_480p_Output() || is_1080i_Full_Output() || is_1080i_Info_Output());
+           (is_LCD_Output() || is_480p_Output() || is_1080i_Full_Output() || is_1080i_Info_Output() ||
+            ext_monitor_hdmi /* any other HDMI mode (720p ...): generic placement, not measured */);
 }
 
 static int film_frame_rect(int * x, int * y, int * w, int * h)
@@ -708,11 +710,17 @@ static int film_frame_rect(int * x, int * y, int * w, int * h)
     return 1;
 }
 
+/* The frame refresh_cropmarks() last handed to the crop marks (same clamping), kept so Kill Global Draw
+ * can draw the same black bars when the picture is not a Film Format one (anamorphic, other presets) */
+static int cm_valid = 0;
+static int cm_x, cm_y, cm_w, cm_h;
+
 static void refresh_cropmarks()
 {
     if ((lv_dispsize > 1 && !crop_rec_cropmarks() && !film_frame_possible()) || lv_dispsize > 5 || raw_rec_should_preview() || !raw_video_enabled)
     {
         reset_movie_cropmarks();
+        cm_valid = 0;
     }
     else
     {
@@ -753,6 +761,12 @@ static void refresh_cropmarks()
         film_frame_rect(&x, &y, &w, &h);
 
         set_movie_cropmarks(x, y, w, h);
+
+        cm_x = COERCE(x, os.x0 + 1, os.x_max - 1);
+        cm_y = COERCE(y, os.y0 + 2, os.y_max - 2);
+        cm_w = COERCE(w, 0, os.x_max - 2 - cm_x);
+        cm_h = COERCE(h, 0, os.y_max - 4 - cm_y);
+        cm_valid = 1;
     }
 }
 
@@ -818,7 +832,8 @@ static void refresh_cropmarks_if_changed(void)
             | (crop_rec_film_format() << 6)
             | (raw_video_enabled ? 1 << 12 : 0)
             | ((is_LCD_Output() ? 1 : 0) << 13)
-            | ((is_480p_Output() ? 1 : 0) << 14);
+            | ((is_480p_Output() ? 1 : 0) << 14)
+            | ((ext_monitor_hdmi ? 1 : 0) << 11);
     sig ^= (res_x * 7 + res_y * 13 + skip_x * 17 + skip_y * 19) << 15;
 
     if (sig != last_sig)
@@ -826,6 +841,18 @@ static void refresh_cropmarks_if_changed(void)
         last_sig = sig;
         refresh_cropmarks();
     }
+}
+
+/* The frame Kill Global Draw keeps on screen: the Film Format frame, or else whatever frame the crop
+ * marks were showing (e.g. anamorphic modes) */
+static int kill_gd_frame_rect(int * x, int * y, int * w, int * h)
+{
+    if (film_frame_rect(x, y, w, h))
+        return 1;
+    if (!cm_valid)
+        return 0;
+    *x = cm_x; *y = cm_y; *w = cm_w; *h = cm_h;
+    return 1;
 }
 
 /* Safety net: the Film Format bars can be wiped by Canon after boot (zoom x1/x5 switching).
@@ -836,11 +863,7 @@ static int film_bars_missing(void)
 {
     int x, y, w, h;
 
-    /* the pixel positions are only known for the camera LCD */
-    if (!is_LCD_Output())
-        return 0;
-
-    if (!film_frame_rect(&x, &y, &w, &h))
+    if (!kill_gd_frame_rect(&x, &y, &w, &h))
         return 0;
 
     if (x >= 8)
@@ -2517,6 +2540,7 @@ unsigned int raw_rec_polling_cbr(unsigned int unused)
         refresh_cropmarks_if_changed();
     }
     film_frame_settle_redraw();
+    kill_gd_bars_restore();
     
     /* update status messages */
     show_recording_status();
@@ -2584,6 +2608,43 @@ int mlv_raw_rec_busy()
     return !RAW_IS_IDLE;
 }
 
+/* Kill Global Draw: the Film Format frame is made of ML-drawn black bars and an edge line.
+ * With Global Draw killed nothing redraws them, so they are drawn here once at the start of
+ * the recording, and put back by kill_gd_bars_restore() if something wipes them. */
+static void draw_film_bars(void)
+{
+    int fx, fy, fw, fh;
+    if (kill_gd_frame_rect(&fx, &fy, &fw, &fh))
+    {
+        /* on HDMI the bitmap has a margin left of / above x=0,y=0 (BMP_W_MINUS, BMP_H_MINUS) that is
+         * visible on the monitor: the bars must cover it too, or the picture shows through there */
+        int x1 = COERCE(fx, BMP_W_MINUS, BMP_W_PLUS);
+        int y1 = COERCE(fy, BMP_H_MINUS, BMP_H_PLUS);
+        int x2 = COERCE(fx + fw, BMP_W_MINUS, BMP_W_PLUS);
+        int y2 = COERCE(fy + fh, BMP_H_MINUS, BMP_H_PLUS);
+        bmp_fill(COLOR_BLACK, BMP_W_MINUS, BMP_H_MINUS, BMP_W_PLUS - BMP_W_MINUS, y1 - BMP_H_MINUS);   /* top    */
+        bmp_fill(COLOR_BLACK, BMP_W_MINUS, y2, BMP_W_PLUS - BMP_W_MINUS, BMP_H_PLUS - y2);             /* bottom */
+        bmp_fill(COLOR_BLACK, BMP_W_MINUS, y1, x1 - BMP_W_MINUS, y2 - y1);                             /* left   */
+        bmp_fill(COLOR_BLACK, x2, y1, BMP_W_PLUS - x2, y2 - y1);                                       /* right  */
+        bmp_draw_rect(COLOR_GRAY(70), x1, y1, x2 - x1, y2 - y1);                                       /* edge   */
+    }
+}
+
+/* While recording with Kill Global Draw on: twice a second, look at one pixel inside a bar and,
+ * only if the bars are gone, draw them again.  Costs one pixel read when nothing is wrong. */
+static void kill_gd_bars_restore(void)
+{
+    static int last = 0;
+    if (!kill_gd || !RAW_IS_RECORDING)
+        return;
+    int now = get_ms_clock();
+    if (now - last < 500)
+        return;
+    last = now;
+    if (film_bars_missing())
+        draw_film_bars();
+}
+
 static REQUIRES(RawRecTask)
 void hack_liveview(int unhack)
 {
@@ -2600,19 +2661,7 @@ void hack_liveview(int unhack)
             clrscr();
             gd_was_killed = 1;
 
-            int fx, fy, fw, fh;
-            if (film_frame_rect(&fx, &fy, &fw, &fh))
-            {
-                int x1 = COERCE(fx, 0, BMP_W_PLUS);
-                int y1 = COERCE(fy, 0, BMP_H_PLUS);
-                int x2 = COERCE(fx + fw, 0, BMP_W_PLUS);
-                int y2 = COERCE(fy + fh, 0, BMP_H_PLUS);
-                bmp_fill(COLOR_BLACK, 0, 0, BMP_W_PLUS, y1);                          /* top    */
-                bmp_fill(COLOR_BLACK, 0, y2, BMP_W_PLUS, BMP_H_PLUS - y2);            /* bottom */
-                bmp_fill(COLOR_BLACK, 0, y1, x1, y2 - y1);                            /* left   */
-                bmp_fill(COLOR_BLACK, x2, y1, BMP_W_PLUS - x2, y2 - y1);              /* right  */
-                bmp_draw_rect(COLOR_GRAY(70), x1, y1, x2 - x1, y2 - y1);              /* edge   */
-            }
+            draw_film_bars();
         }
         else if (gd_was_killed)
         {
@@ -4953,7 +5002,7 @@ static struct menu_entry raw_video_menu[] =
 };
 
 
-/* Shutter record: set when a half-press was used as the REC key, so only then is the matching
+/* Half-Shutter Record: set when a half-press was used as the REC key, so only then is the matching
  * release swallowed (otherwise Canon would see a release without its press, or the reverse). */
 static int shutter_rec_press_taken = 0;
 
@@ -4984,7 +5033,7 @@ unsigned int raw_rec_keypress_cbr(unsigned int key)
     if (!RAW_IS_IDLE && key == MODULE_KEY_PRESS_ZOOMIN)
         return 0;
 
-    /* Settings -> Shutter record (EOS M): a half-press of the shutter button starts/stops
+    /* Settings -> Half-Shutter Record (EOS M): a half-press of the shutter button starts/stops
      * recording, like the REC key (a full press is not reported to ML).  The release is
      * swallowed so Canon does not see half of the pair. */
     int shutter_rec = crop_rec_shutter_record();
