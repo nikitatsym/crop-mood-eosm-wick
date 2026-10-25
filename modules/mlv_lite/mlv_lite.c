@@ -458,6 +458,7 @@ static GUARDED_BY(RawRecTask)   uint64_t mlv_start_timestamp = 0;
 
 static int raw_rec_should_preview(void);
 static void kill_gd_bars_restore(void);
+static void diag_hdmi_numbers(void);
 static void lvrecov_log_state(void);
 
 /* old mlv_rec interface stuff here */
@@ -2541,6 +2542,7 @@ unsigned int raw_rec_polling_cbr(unsigned int unused)
     }
     film_frame_settle_redraw();
     kill_gd_bars_restore();
+    diag_hdmi_numbers();
     
     /* update status messages */
     show_recording_status();
@@ -2627,25 +2629,6 @@ static void draw_film_bars(void)
         bmp_fill(COLOR_BLACK, BMP_W_MINUS, y1, x1 - BMP_W_MINUS, y2 - y1);                             /* left   */
         bmp_fill(COLOR_BLACK, x2, y1, BMP_W_PLUS - x2, y2 - y1);                                       /* right  */
         bmp_draw_rect(COLOR_GRAY(70), x1, y1, x2 - x1, y2 - y1);                                       /* edge   */
-
-        /* TEMPORARY diagnostic for the A35-Ana 1.33x HDMI frame: the numbers behind the frame, on screen
-         * (HDMI only).  To be removed once the frame is calibrated. */
-        if (ext_monitor_hdmi)
-        {
-            int film_rect = film_frame_possible();
-            int bg = bmp_getpixel(COERCE(x1 / 2, BMP_W_MINUS, BMP_W_PLUS - 1), COERCE(y1 + (y2 - y1) / 2, BMP_H_MINUS, BMP_H_PLUS - 1));
-            bmp_printf(FONT(FONT_MED, COLOR_WHITE, COLOR_BLACK), 120, 120,
-                "D1 film%d lcd%d p%d i%d sq%d ds%d bg%d",
-                film_rect, is_LCD_Output(), is_480p_Output(),
-                is_1080i_Full_Output() + 2 * is_1080i_Info_Output(),
-                (int)(squeeze_factor * 100), lv_dispsize, bg);
-            bmp_printf(FONT(FONT_MED, COLOR_WHITE, COLOR_BLACK), 120, 150,
-                "D2 os %d %d %d %d  res %d %d",
-                os.x0, os.y0, os.x_ex, os.y_ex, res_x, res_y);
-            bmp_printf(FONT(FONT_MED, COLOR_WHITE, COLOR_BLACK), 120, 180,
-                "D3 rect %d %d %d %d  fi%d",
-                fx, fy, fw, fh, crop_rec_film_format());
-        }
     }
 }
 
@@ -2662,6 +2645,35 @@ static void kill_gd_bars_restore(void)
     last = now;
     if (film_bars_missing())
         draw_film_bars();
+}
+
+/* TEMPORARY diagnostic for the A35-Ana 1.33x HDMI frame: the numbers behind the frame, on screen, twice a
+ * second, whenever an HDMI monitor is connected (also when no frame can be drawn).  Remove once calibrated. */
+static void diag_hdmi_numbers(void)
+{
+    static int last = 0;
+    if (!ext_monitor_hdmi || !lv || gui_menu_shown())
+        return;
+    int now = get_ms_clock();
+    if (now - last < 500)
+        return;
+    last = now;
+
+    int fx = 0, fy = 0, fw = 0, fh = 0;
+    int got = film_frame_rect(&fx, &fy, &fw, &fh);
+    bmp_printf(FONT(FONT_MED, COLOR_WHITE, COLOR_BLACK), 120, 120,
+        "D1 fi%d dsp%d sq%d pos%d got%d rec%d cm%d   ",
+        crop_rec_film_format(), lv_dispsize, (int)(squeeze_factor * 100),
+        film_frame_possible(), got, RAW_IS_RECORDING ? 1 : 0, cm_valid);
+    bmp_printf(FONT(FONT_MED, COLOR_WHITE, COLOR_BLACK), 120, 150,
+        "D2 out L%d p%d f%d i%d   ",
+        is_LCD_Output(), is_480p_Output(), is_1080i_Full_Output(), is_1080i_Info_Output());
+    bmp_printf(FONT(FONT_MED, COLOR_WHITE, COLOR_BLACK), 120, 180,
+        "D3 os %d %d %d %d  res %d %d   ",
+        os.x0, os.y0, os.x_ex, os.y_ex, res_x, res_y);
+    bmp_printf(FONT(FONT_MED, COLOR_WHITE, COLOR_BLACK), 120, 210,
+        "D4 rect %d %d %d %d  cm %d %d %d %d   ",
+        fx, fy, fw, fh, cm_x, cm_y, cm_w, cm_h);
 }
 
 static REQUIRES(RawRecTask)
