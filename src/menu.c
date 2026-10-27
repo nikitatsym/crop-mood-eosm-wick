@@ -6599,6 +6599,11 @@ handle_ml_menu_keys(struct event * event)
         break;
 
     case BGMT_INFO:
+#ifdef CONFIG_SLIM_MENUS
+        /* the help files are not part of this build ("help files not found"): the INFO button
+         * does nothing in the menu */
+        break;
+#endif
         menu_help_active = !menu_help_active;
         menu_lv_transparent_mode = 0;
         if (menu_help_active)

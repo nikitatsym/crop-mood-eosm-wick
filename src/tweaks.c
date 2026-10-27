@@ -3424,6 +3424,9 @@ static CONFIG_INT("anamorphic.preview.slim.version", anamorphic_preview_slim_ver
 
 #ifndef FEATURE_ANAMORPHIC_PREVIEW
 #define anamorphic_preview 0
+/* feature removed: keep the symbols other files link against */
+void anamorphic_preview_set_toggle(void) {}
+void anamorphic_preview_add_slim_menu(void) {}
 #endif
 
 #ifdef FEATURE_ANAMORPHIC_PREVIEW

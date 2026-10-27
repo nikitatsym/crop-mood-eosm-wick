@@ -3644,7 +3644,6 @@ struct menu_entry zebra_menus[] = {
     MENU_PLACEHOLDER("Cropmarks"),
     #endif
     #ifdef CONFIG_SLIM_MENUS
-    MENU_PLACEHOLDER("Anamorphic"),
     MENU_PLACEHOLDER("B&W Preview"),
     #endif
     #ifdef FEATURE_FOCUS_PEAK

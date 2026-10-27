@@ -859,17 +859,35 @@ static int kill_gd_frame_rect(int * x, int * y, int * w, int * h)
  * Once Live View has been stable for a moment, check one pixel inside a bar; only if it is
  * not there do the same full redraw that closing a menu does, once.  Opening any menu counts
  * as done (its close redraws). */
-static int film_bars_missing(void)
+/* Look at one pixel inside one of the four bars; 1 if it is not black.
+ * full = 0: only the area the crop marks draw in (os rectangle): used while idle.
+ * full = 1: the whole bitmap, including the margin that is only visible over HDMI: used by Kill
+ *           Global Draw, which draws the bars over all of it.
+ * A bar can be thin on one side (e.g. the A35 1.33x frame is almost full height and starts at
+ * x = 2 on HDMI), so every bar that is at least 8 pixels wide is tried, left one first. */
+static int film_bars_missing(int full)
 {
     int x, y, w, h;
 
     if (!kill_gd_frame_rect(&x, &y, &w, &h))
         return 0;
 
-    if (x >= 8)
-        return bmp_getpixel(x / 2, y + h / 2) != COLOR_BLACK;
-    if (y >= 8)
-        return bmp_getpixel(x + w / 2, y / 2) != COLOR_BLACK;
+    int hdmi = ext_monitor_hdmi;
+    int xa = full ? (hdmi ? BMP_W_MINUS : 0) : os.x0;
+    int ya = full ? (hdmi ? BMP_H_MINUS : 0) : os.y0;
+    int xp = full ? (hdmi ? BMP_W_PLUS : 720) : os.x_max;
+    int yp = full ? (hdmi ? BMP_H_PLUS : 480) : os.y_max;
+    xp = MIN(xp, BMP_W_PLUS - 1);
+    yp = MIN(yp, BMP_H_PLUS - 1);
+
+    if (x - xa >= 8)
+        return bmp_getpixel((xa + x) / 2, y + h / 2) != COLOR_BLACK;           /* left   */
+    if (xp - (x + w) >= 8)
+        return bmp_getpixel((x + w + xp) / 2, y + h / 2) != COLOR_BLACK;       /* right  */
+    if (y - ya >= 8)
+        return bmp_getpixel(x + w / 2, (ya + y) / 2) != COLOR_BLACK;           /* top    */
+    if (yp - (y + h) >= 8)
+        return bmp_getpixel(x + w / 2, (y + h + yp) / 2) != COLOR_BLACK;       /* bottom */
     return 0;   /* no bars to check */
 }
 
@@ -911,7 +929,7 @@ static void film_frame_settle_redraw(void)
     if (now - t_start > 1500)
     {
         done = 1;
-        if (film_bars_missing())
+        if (film_bars_missing(0))
             redraw();
     }
 }
@@ -2641,7 +2659,7 @@ static void kill_gd_bars_restore(void)
     if (now - last < 500)
         return;
     last = now;
-    if (film_bars_missing())
+    if (film_bars_missing(1))
         draw_film_bars();
 }
 

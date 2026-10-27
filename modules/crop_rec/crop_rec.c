@@ -7155,6 +7155,76 @@ static unsigned int crop_rec_polling_cbr(unsigned int unused)
             }
         }
 
+        /* FILM standard: keep the shutter ANGLE when the frame rate is changed in the menu.
+         * The camera keeps the shutter TIME, so 172 degrees at 23.976 fps would become 180 at 25 fps.
+         * This remembers the angle the shutter had (measured only while the frame rate has not changed
+         * and the shutter has not been touched), and after a frame rate change sets the nearest shutter
+         * value (steps of 1/8 stop, so within about 4 percent) once the new frame rate is running.
+         * Nothing happens while recording, outside the FILM standard, or when the shutter was changed
+         * by hand since (the new angle is then simply remembered). */
+        {
+            static const int nominal_fps[6] = { 23976, 25000, 29970, 18000, 35990, 48000 };
+            static int ah_menu_fps = -1;    /* frame rate setting the held angle belongs to */
+            static int ah_x10 = 0;          /* held shutter angle, degrees x10 */
+            static int ah_raw = 0;          /* raw shutter value that angle was measured from / set to */
+            static int ah_pending = 0;      /* the frame rate setting changed: re-apply the angle */
+            static int ah_seen_raw = 0, ah_stable = 0, ah_t = 0, ah_ignore_until = 0;
+
+            int now = get_ms_clock();
+            if (now - ah_t >= 250)
+            {
+                ah_t = now;
+                if (!RECORDING && lv && is_movie_mode() && crop_rec_film_standard())
+                {
+                    int menu_fps = COERCE(crop_preset_fps_menu, 0, 5);
+                    int nom = nominal_fps[menu_fps];
+                    int real_fps = fps_get_current_x1000();
+                    int settled = real_fps > 0 && ABS(real_fps - nom) * 100 <= nom * 2;
+                    int s_x1000 = get_current_shutter_reciprocal_x1000();
+                    int raw = lens_info.raw_shutter;
+
+                    if (ah_menu_fps != menu_fps)
+                    {
+                        ah_pending = (ah_menu_fps >= 0 && ah_x10 > 0);
+                        ah_menu_fps = menu_fps;
+                        ah_stable = 0;
+                    }
+
+                    ah_stable = (raw == ah_seen_raw && settled) ? ah_stable + 1 : 0;
+                    ah_seen_raw = raw;
+
+                    if (ah_stable >= 2 && s_x1000 > 0 && raw > 0 && now >= ah_ignore_until)
+                    {
+                        if (ah_pending)
+                        {
+                            ah_pending = 0;
+                            float shutterf = (ah_x10 / 3600.0f) * (1000.0f / nom);   /* seconds */
+                            int want_raw = shutterf_to_raw(shutterf);
+                            if (want_raw > 0 && want_raw != raw)
+                            {
+                                shutter_lock_accept(want_raw);   /* the EOS M shutter lock would undo it otherwise */
+                                lens_set_rawshutter(want_raw);
+                                ah_raw = want_raw;
+                                ah_ignore_until = now + 2000;    /* let the new value show up before measuring again */
+                            }
+                            else
+                                ah_raw = raw;
+                        }
+                        else if (raw != ah_raw)
+                        {
+                            /* first run, or the shutter was changed by hand: remember its angle */
+                            ah_x10 = (int)(3600.0f * real_fps / s_x1000);
+                            ah_raw = raw;
+                        }
+                    }
+                }
+                else
+                {
+                    ah_stable = 0;
+                }
+            }
+        }
+
         // FIXME: for now, "More" hacks must be on in order to get wokring preview in 3x3 presets while recording
         // see notes in reg_override_3X3
         {
