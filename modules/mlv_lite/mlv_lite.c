@@ -458,7 +458,6 @@ static GUARDED_BY(RawRecTask)   uint64_t mlv_start_timestamp = 0;
 
 static int raw_rec_should_preview(void);
 static void kill_gd_bars_restore(void);
-static void diag_hdmi_numbers(void);
 static void lvrecov_log_state(void);
 
 /* old mlv_rec interface stuff here */
@@ -860,17 +859,35 @@ static int kill_gd_frame_rect(int * x, int * y, int * w, int * h)
  * Once Live View has been stable for a moment, check one pixel inside a bar; only if it is
  * not there do the same full redraw that closing a menu does, once.  Opening any menu counts
  * as done (its close redraws). */
-static int film_bars_missing(void)
+/* Look at one pixel inside one of the four bars; 1 if it is not black.
+ * full = 0: only the area the crop marks draw in (os rectangle): used while idle.
+ * full = 1: the whole bitmap, including the margin that is only visible over HDMI: used by Kill
+ *           Global Draw, which draws the bars over all of it.
+ * A bar can be thin on one side (e.g. the A35 1.33x frame is almost full height and starts at
+ * x = 2 on HDMI), so every bar that is at least 8 pixels wide is tried, left one first. */
+static int film_bars_missing(int full)
 {
     int x, y, w, h;
 
     if (!kill_gd_frame_rect(&x, &y, &w, &h))
         return 0;
 
-    if (x >= 8)
-        return bmp_getpixel(x / 2, y + h / 2) != COLOR_BLACK;
-    if (y >= 8)
-        return bmp_getpixel(x + w / 2, y / 2) != COLOR_BLACK;
+    int hdmi = ext_monitor_hdmi;
+    int xa = full ? (hdmi ? BMP_W_MINUS : 0) : os.x0;
+    int ya = full ? (hdmi ? BMP_H_MINUS : 0) : os.y0;
+    int xp = full ? (hdmi ? BMP_W_PLUS : 720) : os.x_max;
+    int yp = full ? (hdmi ? BMP_H_PLUS : 480) : os.y_max;
+    xp = MIN(xp, BMP_W_PLUS - 1);
+    yp = MIN(yp, BMP_H_PLUS - 1);
+
+    if (x - xa >= 8)
+        return bmp_getpixel((xa + x) / 2, y + h / 2) != COLOR_BLACK;           /* left   */
+    if (xp - (x + w) >= 8)
+        return bmp_getpixel((x + w + xp) / 2, y + h / 2) != COLOR_BLACK;       /* right  */
+    if (y - ya >= 8)
+        return bmp_getpixel(x + w / 2, (ya + y) / 2) != COLOR_BLACK;           /* top    */
+    if (yp - (y + h) >= 8)
+        return bmp_getpixel(x + w / 2, (y + h + yp) / 2) != COLOR_BLACK;       /* bottom */
     return 0;   /* no bars to check */
 }
 
@@ -912,7 +929,7 @@ static void film_frame_settle_redraw(void)
     if (now - t_start > 1500)
     {
         done = 1;
-        if (film_bars_missing())
+        if (film_bars_missing(0))
             redraw();
     }
 }
@@ -2542,7 +2559,6 @@ unsigned int raw_rec_polling_cbr(unsigned int unused)
     }
     film_frame_settle_redraw();
     kill_gd_bars_restore();
-    diag_hdmi_numbers();
     
     /* update status messages */
     show_recording_status();
@@ -2643,37 +2659,8 @@ static void kill_gd_bars_restore(void)
     if (now - last < 500)
         return;
     last = now;
-    if (film_bars_missing())
+    if (film_bars_missing(1))
         draw_film_bars();
-}
-
-/* TEMPORARY diagnostic for the A35-Ana 1.33x HDMI frame: the numbers behind the frame, on screen, twice a
- * second, whenever an HDMI monitor is connected (also when no frame can be drawn).  Remove once calibrated. */
-static void diag_hdmi_numbers(void)
-{
-    static int last = 0;
-    if (!ext_monitor_hdmi || !lv || gui_menu_shown())
-        return;
-    int now = get_ms_clock();
-    if (now - last < 500)
-        return;
-    last = now;
-
-    int fx = 0, fy = 0, fw = 0, fh = 0;
-    int got = film_frame_rect(&fx, &fy, &fw, &fh);
-    bmp_printf(FONT(FONT_MED, COLOR_WHITE, COLOR_BLACK), 120, 120,
-        "D1 fi%d dsp%d sq%d pos%d got%d rec%d cm%d   ",
-        crop_rec_film_format(), lv_dispsize, (int)(squeeze_factor * 100),
-        film_frame_possible(), got, RAW_IS_RECORDING ? 1 : 0, cm_valid);
-    bmp_printf(FONT(FONT_MED, COLOR_WHITE, COLOR_BLACK), 120, 150,
-        "D2 out L%d p%d f%d i%d   ",
-        is_LCD_Output(), is_480p_Output(), is_1080i_Full_Output(), is_1080i_Info_Output());
-    bmp_printf(FONT(FONT_MED, COLOR_WHITE, COLOR_BLACK), 120, 180,
-        "D3 os %d %d %d %d  res %d %d   ",
-        os.x0, os.y0, os.x_ex, os.y_ex, res_x, res_y);
-    bmp_printf(FONT(FONT_MED, COLOR_WHITE, COLOR_BLACK), 120, 210,
-        "D4 rect %d %d %d %d  cm %d %d %d %d   ",
-        fx, fy, fw, fh, cm_x, cm_y, cm_w, cm_h);
 }
 
 static REQUIRES(RawRecTask)
