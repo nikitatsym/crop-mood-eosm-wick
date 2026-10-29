@@ -1450,16 +1450,6 @@ menu_update_placeholder(struct menu * menu, struct menu_entry * new_entry)
             
             placeholder_copy(entry, new_entry);
             entry->shidden = 0;
-#ifdef CONFIG_SLIM_MENUS
-            /* Film Edge: set-and-forget rows are hidden from the Settings list.
-             * They keep working with their saved values; they just aren't shown. */
-            if (streq(new_entry->name, "HDMI Output") ||
-                streq(new_entry->name, "HDMI Resolution") ||
-                streq(new_entry->name, "Small Hacks") ||
-                streq(new_entry->name, "More Hacks") ||
-                streq(new_entry->name, "Card Benchmark"))
-                entry->shidden = 1;
-#endif
             new_entry->shidden = 1;
             new_entry->placeholder = 1;
             
