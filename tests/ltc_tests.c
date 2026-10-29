@@ -58,13 +58,11 @@ static int run(const char*name, cfg_t c, int decoder_fps_x1000, int stereo, int 
     if (stereo) { for(int i=0;i<n;i++){ st[2*i]=mono[i]; st[2*i+1]=(int16_t)(8000*sin(i*0.05)); } src=st; stride=2; }
     ltc_t t; ltc_init(&t,c.rate,decoder_fps_x1000);
     int prev=-1, good=0, bad=0, first_h=-1;
-    int idx_total=0;
     for (int p=0;p<n;p+=chunk){
         int k = (n-p<chunk)?n-p:chunk;
         uint32_t before=t.frames_ok;
         ltc_feed(&t, src+p*stride, k, stride);
         (void)before;
-        idx_total+=k;
         if (t.frames_ok!=before) {
             int idx = ((t.h*60+t.m)*60+t.s)*c.nominal+t.f;
             if (prev>=0) { int dlt=idx-prev; if (dlt>=1 && dlt<=2 && t.frames_ok==before+ (uint32_t)dlt) good++; else if (dlt==(int)(t.frames_ok-before)) good++; else bad++; }
@@ -73,8 +71,8 @@ static int run(const char*name, cfg_t c, int decoder_fps_x1000, int stereo, int 
         }
     }
     int expect_start = ((1*60+12)*60+44)*c.nominal+5;
-    printf("%-44s frames_ok=%4u of %d  first=%s  bad_steps=%d  last=%02d:%02d:%02d:%02d\n", name, t.frames_ok, nframes,
-           (first_h>=expect_start && first_h<=expect_start+3)?"ok":"WRONG", bad, t.h,t.m,t.s,t.f);
+    printf("%-44s frames_ok=%4u of %d  first=%s  good_steps=%d  bad_steps=%d  last=%02d:%02d:%02d:%02d\n", name, t.frames_ok, nframes,
+           (first_h>=expect_start && first_h<=expect_start+3)?"ok":"WRONG", good, bad, t.h,t.m,t.s,t.f);
     return (t.frames_ok >= (unsigned)(nframes-3) && bad==0 && first_h>=expect_start && first_h<=expect_start+3)?0:1;
 }
 
