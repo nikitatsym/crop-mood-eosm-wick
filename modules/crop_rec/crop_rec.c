@@ -126,7 +126,7 @@ static int a35_short_readout = 0;   /* 48 fps on A35 16:9 / 1.85: 1736x958 reado
 CONFIG_INT("crop.button_SET",       SET_button, 1);
 static CONFIG_INT("crop.button_H-Shutter", Half_Shutter, 2);
 CONFIG_INT("crop.button_INFO",      INFO_button, 6);  /* 6 = Quick Panel (EOS M default) */
-static CONFIG_INT("crop.shutter_rec", Shutter_rec, 0); /* EOS M slim: 0=OFF, 1=half-press starts/stops recording */
+static CONFIG_INT("crop.shutter_rec", Shutter_rec, 0); /* EOS M slim Half-Shutter Button: 0=OFF, 1=record start/stop, 2=hold x10, 3=sticky x10 */
 CONFIG_INT("crop.arrows_U_D",       Arrows_U_D, 3); /* ISO */
 CONFIG_INT("crop.more_hacks",       more_hacks, 1);
 /* Starting shutter (FILM): applied once, on the first boot after a new build is installed, after the saved settings
@@ -315,6 +315,46 @@ static void slim_zoom_from_x10(void)
         canon_gui_enable_front_buffer(0);
     wait_lv_frames(1);
     redraw();
+}
+
+/* Settings -> Half-Shutter Button: hold x10 (2) or sticky x10 (3), like SET. */
+static int slim_handle_shutter_zoom(unsigned int key)
+{
+    if (Shutter_rec < 2 || !is_EOSM || !is_movie_mode()) return 0;
+    if (!lv || gui_menu_shown() || RECORDING) return 0;
+    if (lv_disp_mode != 0) return 0;
+
+    int base = slim_lv_base_zoom();
+
+    if (Shutter_rec == 2)
+    {
+        if (key == MODULE_KEY_PRESS_HALFSHUTTER && lv_dispsize == base)
+        {
+            slim_zoom_to_x10();
+            return 1;
+        }
+        if (key == MODULE_KEY_UNPRESS_HALFSHUTTER && lv_dispsize == 10)
+        {
+            slim_zoom_from_x10();
+            return 1;
+        }
+    }
+    else
+    {
+        if (key == MODULE_KEY_PRESS_HALFSHUTTER)
+        {
+            if (lv_dispsize == base)
+                slim_zoom_to_x10();
+            else if (lv_dispsize == 10)
+                slim_zoom_from_x10();
+            return 1;
+        }
+        /* Swallow half-shutter release so Canon does not disturb x10 preview. */
+        if (key == MODULE_KEY_UNPRESS_HALFSHUTTER)
+            return 1;
+    }
+
+    return 0;
 }
 
 /* EOS M Settings -> SET Button. Keep this independent of the legacy SET
@@ -4332,7 +4372,7 @@ static MENU_UPDATE_FUNC(slim_info_button_update)
     last_info_button = INFO_button;
 }
 
-/* Settings → INFO / Up-Down / Half-Shutter Record (EOS M slim). */
+/* Settings → INFO / Up-Down / Half-Shutter Button (EOS M slim). */
 static struct menu_entry slim_info_button_menu[] = {
     {
         .name      = "INFO Button",
@@ -4368,14 +4408,14 @@ static struct menu_entry slim_info_button_menu[] = {
         .help2     = "Shutter: faster/slower. Aperture: open/close. ISO: up/down.",
     },
     {
-        .name      = "Half-Shutter Record",
+        .name      = "Half-Shutter Button",
         .priv      = &Shutter_rec,
-        .max       = 1,
-        .choices   = CHOICES("OFF", "Half-press"),
+        .max       = 3,
+        .choices   = CHOICES("OFF", "Record", "x10 hold", "x10 sticky"),
         .edit_mode = EM_INLINE_ADJUST,
         .icon_type = IT_DICE,
-        .help      = "Half-press the shutter button to start/stop recording (movie mode).",
-        .help2     = "Press only halfway: a full press still takes a photo.",
+        .help      = "Half-press in movie LiveView: start/stop recording, or x10 zoom for focus.",
+        .help2     = "x10 hold: zoom while held. x10 sticky: each half-press toggles. A full press takes a photo.",
     },
 };
 
@@ -4514,7 +4554,7 @@ static int slim_film_active(void)
 /* used by mlv_lite; reads the real crop mode, not the menu state */
 int crop_rec_shutter_record()
 {
-    return is_EOSM && Shutter_rec;
+    return is_EOSM && Shutter_rec == 1;
 }
 
 /* 1 when the active recording format is one of the FILM standard formats (shutter shown as an angle) */
@@ -7606,6 +7646,9 @@ static unsigned int crop_rec_keypress_cbr(unsigned int key)
             if (slim_handle_main_dial_shutter(key))
                 return 0;
 
+            if (slim_handle_shutter_zoom(key))
+                return 0;
+
             if (slim_handle_set_button(key))
                 return 0;
 
@@ -8158,7 +8201,7 @@ static const struct setting_range crop_settings[] = {
     SETTING(fps_over,             -100000,  100000,      0),
     SETTING(SET_button,                 1,       2,      1),  /* slim: x10 zoom / last settings */
     SETTING(INFO_button,                0,       6,      6),  /* default: Quick Panel */
-    SETTING(Shutter_rec,                0,       1,      0),
+    SETTING(Shutter_rec,                0,       3,      0),
     SETTING(Arrows_U_D,                 0,       3,      3),
     SETTING(tapdisp,                    0,       5,      1),
 };
@@ -8337,7 +8380,7 @@ static unsigned int crop_rec_init()
 
         /* EOS M slim: fixed, not user choices */
         more_hacks = 1;
-        Half_Shutter = 0;   /* half-shutter is only used by Half-Shutter Record */
+        Half_Shutter = 0;   /* half-shutter is only used by Half-Shutter Button */
         Arrows_L_R = 0;     /* no Left/Right remap: leave L/R to Canon */
 
         /* Flat Movie-page crop settings (no Crop Mode submenu / Customize Buttons). */

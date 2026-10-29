@@ -15,7 +15,7 @@ static struct menu_entry custom_menu_placeholders[] =
     { .name = "INFO Button",         .placeholder = 1 },
     { .name = "SET Button",          .placeholder = 1 },
     { .name = "Up/Down Button",      .placeholder = 1 },
-    { .name = "Half-Shutter Record",  .placeholder = 1 },
+    { .name = "Half-Shutter Button",  .placeholder = 1 },
     { .name = "HDMI Output",         .placeholder = 1 },
     { .name = "HDMI Resolution",     .placeholder = 1 },
     { .name = "SD Overclock",        .placeholder = 1 },

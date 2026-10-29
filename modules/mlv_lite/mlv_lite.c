@@ -5020,7 +5020,7 @@ static struct menu_entry raw_video_menu[] =
 };
 
 
-/* Half-Shutter Record: set when a half-press was used as the REC key, so only then is the matching
+/* Half-Shutter Button = Record: set when a half-press was used as the REC key, so only then is the matching
  * release swallowed (otherwise Canon would see a release without its press, or the reverse). */
 static int shutter_rec_press_taken = 0;
 
@@ -5051,7 +5051,7 @@ unsigned int raw_rec_keypress_cbr(unsigned int key)
     if (!RAW_IS_IDLE && key == MODULE_KEY_PRESS_ZOOMIN)
         return 0;
 
-    /* Settings -> Half-Shutter Record (EOS M): a half-press of the shutter button starts/stops
+    /* Settings -> Half-Shutter Button = Record (EOS M): a half-press of the shutter button starts/stops
      * recording, like the REC key (a full press is not reported to ML).  The release is
      * swallowed so Canon does not see half of the pair. */
     int shutter_rec = crop_rec_shutter_record();
