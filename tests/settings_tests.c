@@ -16,7 +16,8 @@ static int fps_over = 0, tapdisp = 1, crop_preset_fps_reduce = 1, crop_preset_in
            fix_dual_iso_flicker = 1, bit_depth_analog = 1, brighten_lv_method = 0, crop_preset_ar_menu = 4,
            crop_preset_1x1_res_menu = 3, crop_preset_1x3_res_menu = 1, crop_preset_3x3_res_menu = 2,
            crop_preset_fps_menu = 0, SET_button = 1, Half_Shutter = 2, INFO_button = 6, Shutter_rec = 0,
-           Arrows_U_D = 3, more_hacks = 1, Arrows_L_R = 2, crop_settings_ver = 0, slim_film_fmt = 0, slim_film_frames = 0;
+           Arrows_U_D = 3, more_hacks = 1, Arrows_L_R = 2, crop_settings_ver = 0, slim_film_fmt = 0, slim_film_frames = 0,
+           std_slim = 1;
 
 /* ---- real code from crop_rec.c ---- */
 #include "crop_rec_snippets.h"
@@ -28,6 +29,7 @@ static void reset_defaults(void)
     crop_preset_1x1_res_menu = 3; crop_preset_1x3_res_menu = 1; crop_preset_3x3_res_menu = 2;
     crop_preset_fps_menu = 0; SET_button = 1; Half_Shutter = 2; INFO_button = 6; Shutter_rec = 0;
     Arrows_U_D = 3; more_hacks = 1; Arrows_L_R = 2; crop_settings_ver = CROP_SETTINGS_VERSION; slim_film_fmt = 0; slim_film_frames = 0;
+    std_slim = 1;
 }
 
 int main(void)
@@ -64,6 +66,7 @@ int main(void)
     crop_settings_load();
     CHECK(crop_settings_ver == CROP_SETTINGS_VERSION, "version after first load: %d", crop_settings_ver);
     CHECK(INFO_button == 6 && Arrows_U_D == 3 && SET_button == 1 && crop_preset_index == 3 && fps_over == 0, "fresh defaults must stay as they are (INFO = Quick Panel)");
+    CHECK(std_slim == 1, "a fresh install starts in the SLIM standard");
 
     /* --- config from the oldest builds (version 0): INFO and arrows are converted --- */
     static const struct { int old_info, new_info; const char * what; } info_map[] = {
@@ -142,22 +145,23 @@ int main(void)
     reset_defaults(); crop_settings_ver = 3;
     crop_preset_index = 9; crop_preset_1x1_res_menu = 99; crop_preset_3x3_res_menu = -4; crop_preset_ar_menu = 5;
     crop_preset_fps_menu = 12; bit_depth_analog = -2; fps_over = 2000000000; SET_button = 0; Arrows_U_D = 7;
-    INFO_button = 40; slim_film_fmt = 13; slim_film_frames = -1; shutter_range = 2; tapdisp = 6;
+    INFO_button = 40; slim_film_fmt = 13; slim_film_frames = -1; shutter_range = 2; tapdisp = 6; std_slim = 5;
     crop_settings_load();
     CHECK(crop_preset_index == 1, "crop_preset_index reset to 1, got %d", crop_preset_index);
     CHECK(crop_preset_1x1_res_menu == 3 && crop_preset_3x3_res_menu == 2 && crop_preset_ar_menu == 4 && crop_preset_fps_menu == 0, "preset menus reset to defaults");
     CHECK(bit_depth_analog == 1 && fps_over == 0 && SET_button == 1 && Arrows_U_D == 3 && INFO_button == 6, "other values reset (INFO back to Quick Panel)");
     CHECK(slim_film_fmt == 0 && slim_film_frames == 0 && shutter_range == 0 && tapdisp == 1, "film format / misc reset");
+    CHECK(std_slim == 1, "a damaged Standard goes back to SLIM, got %d", std_slim);
 
     /* --- legitimate values from every menu survive --- */
     reset_defaults(); crop_settings_ver = 3;
     crop_preset_index = 2; crop_preset_1x1_res_menu = 7; crop_preset_1x3_res_menu = 3; crop_preset_3x3_res_menu = 0;
     crop_preset_ar_menu = 0; crop_preset_fps_menu = 3; bit_depth_analog = 3; fps_over = -100000; SET_button = 2;
-    Arrows_U_D = 0; INFO_button = 6; slim_film_fmt = 11; slim_film_frames = 0xFFFFFF; tapdisp = 5;
+    Arrows_U_D = 0; INFO_button = 6; slim_film_fmt = 11; slim_film_frames = 0xFFFFFF; tapdisp = 5; std_slim = 0;
     crop_settings_load();
     CHECK(crop_preset_index == 2 && crop_preset_1x1_res_menu == 7 && crop_preset_1x3_res_menu == 3 && crop_preset_3x3_res_menu == 0 &&
           crop_preset_ar_menu == 0 && crop_preset_fps_menu == 3 && bit_depth_analog == 3 && fps_over == -100000 && SET_button == 2 &&
-          Arrows_U_D == 0 && INFO_button == 6 && slim_film_fmt == 11 && slim_film_frames == 0xFFFFFF && tapdisp == 5,
+          Arrows_U_D == 0 && INFO_button == 6 && slim_film_fmt == 11 && slim_film_frames == 0xFFFFFF && tapdisp == 5 && std_slim == 0,
           "values at the edge of their ranges must be kept");
 
     /* --- Frame choice per Film Format (2 bits each, saved in one number) --- */

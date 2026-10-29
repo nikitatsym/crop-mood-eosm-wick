@@ -30,8 +30,9 @@ def main():
 
     if kind == "function":
         for i, l in enumerate(lines):
-            # definition: starts in column 0, contains "NAME(" and is not a ';'-terminated prototype
-            if l and not l[0].isspace() and (what + "(") in l and not l.rstrip().endswith(";") and not l.startswith(("#", "/", "*")):
+            # definition: starts in column 0, contains "NAME(" (or "(NAME)" for MENU_SELECT_FUNC(NAME) and the
+            # like) and is not a ';'-terminated prototype
+            if l and not l[0].isspace() and ((what + "(") in l or ("(" + what + ")") in l) and not l.rstrip().endswith(";") and not l.startswith(("#", "/", "*")):
                 depth, started = 0, False
                 for j in range(i, len(lines)):
                     print(lines[j])

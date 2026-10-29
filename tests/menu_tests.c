@@ -12,6 +12,9 @@ static int failures = 0, checks = 0;
 static int slim_mode_ui = 2, slim_1x1_ar = 2, slim_unified_preset = 0, crop_preset_ar_menu = 4;
 static int slim_film_fmt = 0, slim_film_frames = 0, crop_preset_fps_menu = 0;
 static int apply_calls = 0;
+static int std_slim = 0;            /* the SLIM standard (crop.std_slim); the film tests run with it off */
+#define MOD(x, m) ((((x) % (m)) + (m)) % (m))
+#define MENU_SELECT_FUNC(name) void name(void * priv, int delta)
 /* backend state read by slim_crop_fps_mask() */
 enum { CROP_PRESET_OFF, CROP_PRESET_1X1, CROP_PRESET_1X3, CROP_PRESET_3X3 };
 static int g_preset = CROP_PRESET_3X3, crop_preset_1x1_res_menu = 3, crop_preset_1x3_res_menu = 1;
@@ -21,6 +24,7 @@ static int g_preset = CROP_PRESET_3X3, crop_preset_1x1_res_menu = 3, crop_preset
 
 /* stand-in for the real mode switch (which writes the sensor settings): not under test here */
 static void slim_crop_apply_mode(void) { apply_calls++; }
+static void slim_crop_sync_from_backend(void) { }
 /* real slim_film_apply is extracted after this point */
 #include "crop_rec_apply_snippet.h"
 
@@ -140,9 +144,91 @@ int main(void)
             }
     }
 
-    /* 4. the default install is FILM */
+    /* 4. with SLIM off, Film Format 0 is the FILM standard */
     slim_film_fmt = 0; slim_film_frames = 0;
-    CHECK(!slim_video_standard(), "default standard is FILM");
+    CHECK(!slim_video_standard(), "format 0 is FILM");
+
+    /* 5. SLIM: no menu state is a film format, and the saved film choice is left alone */
+    std_slim = 1;
+    set_state(9, 1);
+    {
+        int saved_frames = slim_film_frames;
+        for (int m = 0; m <= 3; m++)
+            for (int a = 0; a <= 4; a++)
+                for (int p = 0; p <= 2; p++)
+                {
+                    slim_mode_ui = m; slim_1x1_ar = a; crop_preset_ar_menu = a; slim_unified_preset = p;
+                    CHECK(slim_film_menu_readout() == -1, "SLIM mode %d ar %d preset %d: menu readout must not be a film readout", m, a, p);
+                    CHECK(slim_film_sync() == -1, "SLIM mode %d ar %d preset %d: must not be a film format", m, a, p);
+                    CHECK(slim_film_frame_height() == 0, "SLIM mode %d ar %d preset %d: no film frame height", m, a, p);
+                }
+        CHECK(slim_film_fmt == 9 && slim_film_frames == saved_frames, "SLIM must leave the saved film format and frame alone");
+        CHECK(!slim_video_standard(), "SLIM is not the VIDEO standard, even with a VIDEO format saved");
+    }
+
+    /* 5b. SLIM frame rates are the slim GUI's: bit0 = 23.976, bit1 = 25, bit2 = 30, no 18 / 36 / 48 */
+    {
+        static const struct { int preset, mode, ar, tier, res1x3, mask; const char * what; } fr[] = {
+            { CROP_PRESET_3X3, 2, 4, 0, 0, 0x7, "3x3 3:2: 23.976 / 25 / 30" },
+            { CROP_PRESET_3X3, 2, 0, 0, 0, 0x0, "3x3 16:9 high fps: one fixed rate" },
+            { CROP_PRESET_1X1, 0, 0, 0, 0, 0x7, "1x1 2.33:1 (2.5K): 23.976 / 25 / 30" },
+            { CROP_PRESET_1X1, 0, 1, 0, 0, 0x1, "1x1 2.35:1 Highest (3K): 23.976" },
+            { CROP_PRESET_1X1, 0, 1, 1, 0, 0x3, "1x1 2.35:1 Higher (2.8K): 23.976 / 25" },
+            { CROP_PRESET_1X1, 0, 2, 0, 0, 0x3, "1x1 16:9 (1440p): 23.976 / 25" },
+            { CROP_PRESET_1X1, 0, 3, 0, 0, 0x3, "1x1 3:2 (1280p): 23.976 / 25" },
+            { CROP_PRESET_1X1, 0, 4, 0, 0, 0x1, "1x1 4:3 (1620p): 23.976" },
+            { CROP_PRESET_1X3, 1, 0, 0, 0, 0x1, "1x3 Highest: 23.976 only" },
+            { CROP_PRESET_1X3, 1, 0, 1, 1, 0x1, "1x3 Higher 16:9: 23.976 only" },
+            { CROP_PRESET_1X3, 1, 3, 1, 1, 0x3, "1x3 Higher 2.35:1: 23.976 / 25" },
+            { CROP_PRESET_1X3, 1, 3, 2, 2, 0x3, "1x3 Medium 2.35:1: 23.976 / 25" },
+        };
+        for (unsigned n = 0; n < sizeof(fr) / sizeof(fr[0]); n++)
+        {
+            g_preset = fr[n].preset; slim_mode_ui = fr[n].mode;
+            slim_1x1_ar = fr[n].ar; crop_preset_ar_menu = fr[n].ar;
+            slim_unified_preset = fr[n].tier; crop_preset_1x3_res_menu = fr[n].res1x3;
+            CHECK(slim_crop_fps_mask() == fr[n].mask, "SLIM %s: mask %x, expected %x", fr[n].what, slim_crop_fps_mask(), fr[n].mask);
+        }
+    }
+
+    /* 5c. SLIM Preset row: 1x3 has three tiers, 1x1 2.35:1 has two, everything else one */
+    slim_mode_ui = 1;
+    CHECK(slim_preset_choice_count() == 3, "SLIM 1x3: Highest / Higher / Medium");
+    slim_mode_ui = 0; slim_1x1_ar = 1;
+    CHECK(slim_preset_choice_count() == 2, "SLIM 1x1 2.35:1: Highest / Higher");
+    slim_1x1_ar = 2;
+    CHECK(slim_preset_choice_count() == 1, "SLIM 1x1 16:9: Highest only");
+    slim_mode_ui = 2;
+    CHECK(slim_preset_choice_count() == 1, "SLIM 3x3: Highest only");
+    slim_mode_ui = 3;
+    CHECK(slim_preset_choice_count() == 1, "SLIM LV: one size");
+
+    /* 6. Standard row: FILM -> VIDEO -> SLIM -> FILM; FILM and VIDEO come back at their last format */
+    std_slim = 0;
+    set_state(3, 0);                          /* 16mm */
+    slim_film_apply(3);
+    slim_crop_standard_select(0, 1);
+    CHECK(!std_slim && slim_film_fmt == FILM_FILM_COUNT, "FILM -> VIDEO starts at the first VIDEO size, got %d", slim_film_fmt);
+    slim_crop_standard_select(0, 1);
+    CHECK(std_slim, "VIDEO -> SLIM");
+    CHECK(slim_film_fmt == FILM_FILM_COUNT, "entering SLIM keeps the saved format");
+    slim_crop_standard_select(0, 1);
+    CHECK(!std_slim && slim_film_fmt == 3, "SLIM -> FILM returns to 16mm, got %d", slim_film_fmt);
+    slim_crop_standard_select(0, -1);
+    CHECK(std_slim, "FILM -> SLIM backwards");
+    slim_crop_standard_select(0, -1);
+    CHECK(!std_slim && slim_film_fmt == FILM_FILM_COUNT, "SLIM -> VIDEO backwards returns to the VIDEO size, got %d", slim_film_fmt);
+
+    /* 6b. a film-only frame rate does not survive the switch to SLIM */
+    std_slim = 0;
+    set_state(4, 0);                          /* S8: 1280p */
+    slim_film_apply(4);
+    g_preset = CROP_PRESET_1X1;
+    crop_preset_fps_menu = 3;                 /* 18 fps */
+    CHECK(slim_crop_fps_mask() & 8, "S8 offers 18 fps");
+    slim_crop_standard_select(0, -1);         /* FILM -> SLIM */
+    CHECK(std_slim && crop_preset_fps_menu == 0, "18 fps becomes 23.976 in SLIM, got index %d", crop_preset_fps_menu);
+    std_slim = 0;
 
     printf("menu_tests: %d checks, %d failed\n", checks, failures);
     return failures != 0;
