@@ -13,8 +13,9 @@ static int slim_mode_ui = 2, slim_1x1_ar = 2, slim_unified_preset = 0, crop_pres
 static int slim_film_fmt = 0, slim_film_frames = 0, crop_preset_fps_menu = 0;
 static int apply_calls = 0;
 static int std_slim = 0;            /* the SLIM standard (crop.std_slim); the film tests run with it off */
+static int INFO_button = 6;
 #define MOD(x, m) ((((x) % (m)) + (m)) % (m))
-#define MENU_SELECT_FUNC(name) void name(void * priv, int delta)
+#define MENU_SELECT_FUNC(name) void name(void * priv __attribute__((unused)), int delta)
 /* backend state read by slim_crop_fps_mask() */
 enum { CROP_PRESET_OFF, CROP_PRESET_1X1, CROP_PRESET_1X3, CROP_PRESET_3X3 };
 static int g_preset = CROP_PRESET_3X3, crop_preset_1x1_res_menu = 3, crop_preset_1x3_res_menu = 1;
@@ -229,6 +230,20 @@ int main(void)
     slim_crop_standard_select(0, -1);         /* FILM -> SLIM */
     CHECK(std_slim && crop_preset_fps_menu == 0, "18 fps becomes 23.976 in SLIM, got index %d", crop_preset_fps_menu);
     std_slim = 0;
+
+    /* 7. INFO Button: stepping skips the hidden Framing (5) and wraps through Dual ISO (7) */
+    INFO_button = 4;
+    slim_info_button_select(0, 1);
+    CHECK(INFO_button == 6, "INFO False Color -> Quick Panel skips Framing, got %d", INFO_button);
+    slim_info_button_select(0, 1);
+    CHECK(INFO_button == 7, "INFO Quick Panel -> Dual ISO, got %d", INFO_button);
+    slim_info_button_select(0, 1);
+    CHECK(INFO_button == 0, "INFO Dual ISO -> OFF, got %d", INFO_button);
+    slim_info_button_select(0, -1);
+    CHECK(INFO_button == 7, "INFO OFF backwards -> Dual ISO, got %d", INFO_button);
+    slim_info_button_select(0, -1);
+    slim_info_button_select(0, -1);
+    CHECK(INFO_button == 4, "INFO backwards skips Framing, got %d", INFO_button);
 
     printf("menu_tests: %d checks, %d failed\n", checks, failures);
     return failures != 0;

@@ -30,6 +30,7 @@ CR=modules/crop_rec/crop_rec.c
   python3 tests/extract.py $CR function slim_crop_fps_mask
   python3 tests/extract.py $CR function slim_preset_choice_count
   python3 tests/extract.py $CR function slim_crop_clamp_fps
+  python3 tests/extract.py $CR function slim_info_button_select
 } > "$OUT/crop_rec_menu_snippets.h"
 {
   python3 tests/extract.py $CR function slim_film_apply

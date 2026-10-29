@@ -1483,7 +1483,7 @@ static MENU_UPDATE_FUNC(iso_display)
 #ifdef CONFIG_SLIM_MENUS
     /* The INFO shortcut changes this config directly; read the same source
      * so menu and Quick Panel update immediately after either path. */
-    /* Dual ISO is disabled in every mode, so the ISO row is never locked by it. */
+    int dual_iso = get_config_var("isoless.hdr") > 0;
     int raw = lens_info.iso ? lens_info.iso_equiv_raw : 72; /* Auto shows as 100 */
     if (gain_display())
     {
@@ -1495,7 +1495,9 @@ static MENU_UPDATE_FUNC(iso_display)
     }
     else
         MENU_SET_VALUE("%d", raw2iso(raw));
-    MENU_SET_ENABLED(1);
+    MENU_SET_ENABLED(!dual_iso);
+    if (dual_iso)
+        MENU_SET_WARNING(MENU_WARN_NOT_WORKING, "Disable Dual ISO to adjust ISO.");
     MENU_SET_SHORT_NAME(" ");
 #else
     MENU_SET_VALUE(

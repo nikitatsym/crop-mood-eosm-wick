@@ -120,7 +120,7 @@ int main(void)
     }
 
     /* --- current config: INFO untouched, and loading twice changes nothing more --- */
-    for (int v = 0; v <= 6; v++)
+    for (int v = 0; v <= 7; v++)
     {
         reset_defaults(); crop_settings_ver = CROP_SETTINGS_VERSION; INFO_button = v; Shutter_rec = 1;
         crop_settings_load();
@@ -158,11 +158,11 @@ int main(void)
     reset_defaults(); crop_settings_ver = 3;
     crop_preset_index = 2; crop_preset_1x1_res_menu = 7; crop_preset_1x3_res_menu = 3; crop_preset_3x3_res_menu = 0;
     crop_preset_ar_menu = 0; crop_preset_fps_menu = 3; bit_depth_analog = 3; fps_over = -100000; SET_button = 2;
-    Arrows_U_D = 0; INFO_button = 6; slim_film_fmt = 11; slim_film_frames = 0xFFFFFF; tapdisp = 5; std_slim = 0; Shutter_rec = 3;
+    Arrows_U_D = 0; INFO_button = 7; slim_film_fmt = 11; slim_film_frames = 0xFFFFFF; tapdisp = 5; std_slim = 0; Shutter_rec = 3;
     crop_settings_load();
     CHECK(crop_preset_index == 2 && crop_preset_1x1_res_menu == 7 && crop_preset_1x3_res_menu == 3 && crop_preset_3x3_res_menu == 0 &&
           crop_preset_ar_menu == 0 && crop_preset_fps_menu == 3 && bit_depth_analog == 3 && fps_over == -100000 && SET_button == 2 &&
-          Arrows_U_D == 0 && INFO_button == 6 && slim_film_fmt == 11 && slim_film_frames == 0xFFFFFF && tapdisp == 5 && std_slim == 0 &&
+          Arrows_U_D == 0 && INFO_button == 7 && slim_film_fmt == 11 && slim_film_frames == 0xFFFFFF && tapdisp == 5 && std_slim == 0 &&
           Shutter_rec == 3,
           "values at the edge of their ranges must be kept");
 

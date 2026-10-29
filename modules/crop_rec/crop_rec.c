@@ -120,8 +120,8 @@ static int a35_short_readout = 0;   /* 48 fps on A35 16:9 / 1.85: 1736x958 reado
  * EOS M slim defaults:
  *   SET = Zoom x10; U/D = ISO; L/R = Aperture; INFO off.
  * Arrow modes: 0=OFF, 1=Shutter, 2=Aperture, 3=ISO
- * INFO modes:  0=OFF, 1=Dual ISO, 2=Histogram, 3=Waveform, 4=Zebras,
- *              5=False Color, 6=framing, 7=Quick Panel
+ * INFO modes:  0=OFF, 1=Histogram, 2=Waveform, 3=Zebras, 4=False Color,
+ *              5=framing (hidden), 6=Quick Panel, 7=Dual ISO
  */
 CONFIG_INT("crop.button_SET",       SET_button, 1);
 static CONFIG_INT("crop.button_H-Shutter", Half_Shutter, 2);
@@ -379,8 +379,11 @@ static int slim_handle_set_button(unsigned int key)
  * CMOS refresh runs from CBR_SHOOT_TASK (do not block the key handler). */
 static void slim_toggle_dual_iso(void)
 {
-    /* Dual ISO is disabled in every mode: the module is not built, and nothing may
-     * switch it on through a config variable either. */
+    if (RECORDING)
+        return;
+    int en = get_config_var("isoless.hdr");
+    set_config_var("isoless.hdr", en ? 0 : 1);
+    lens_display_set_dirty();
 }
 
 /* ISO arrow shortcuts: when Dual ISO is ON, step primary+recovery as a pair. */
@@ -411,7 +414,7 @@ static void crop_rec_adjust_iso(int sign)
 
 /* EOS M Settings → INFO Button:
  * 0=OFF, 1=Histogram, 2=Waveform, 3=Zebras, 4=False Color,
- * 5=Framing, 6=Quick Panel.
+ * 5=Framing, 6=Quick Panel, 7=Dual ISO.
  * Returns: 1 = handled (block Canon), -1 = pass to Canon, 0 = not our INFO mapping. */
 static int slim_handle_info_button(unsigned int key)
 {
@@ -474,6 +477,10 @@ static int slim_handle_info_button(unsigned int key)
                 menu_quick_screen_open();
                 gui_open_menu();
             }
+            return 1;
+
+        case 7: /* Dual ISO on/off */
+            slim_toggle_dual_iso();
             return 1;
 
         default:
@@ -4359,7 +4366,7 @@ static MENU_SELECT_FUNC(slim_info_button_select)
     int v = INFO_button + dir;
     if (v == 5)
         v += dir;
-    INFO_button = MOD(v, 7);
+    INFO_button = MOD(v, 8);
 }
 
 static MENU_UPDATE_FUNC(slim_info_button_update)
@@ -4377,13 +4384,13 @@ static struct menu_entry slim_info_button_menu[] = {
     {
         .name      = "INFO Button",
         .priv      = &INFO_button,
-        .max       = 6,
-        .choices   = CHOICES("OFF", "Histogram", "Waveform", "Zebras", "False Color", "Framing", "Quick Panel"),
+        .max       = 7,
+        .choices   = CHOICES("OFF", "Histogram", "Waveform", "Zebras", "False Color", "Framing", "Quick Panel", "Dual ISO"),
         .edit_mode = EM_INLINE_ADJUST,
         .select    = slim_info_button_select,
         .update    = slim_info_button_update,
         .icon_type = IT_DICE,
-        .help      = "Assign INFO to an overlay or the Quick Panel.",
+        .help      = "Assign INFO to an overlay, the Quick Panel or Dual ISO on/off.",
         .help2     = "OFF uses Canon INFO. Idle LV: long-press INFO (or double-press) opens last setting.",
     },
     {
@@ -8200,7 +8207,7 @@ static const struct setting_range crop_settings[] = {
     SETTING(brighten_lv_method,         0,       1,      0),
     SETTING(fps_over,             -100000,  100000,      0),
     SETTING(SET_button,                 1,       2,      1),  /* slim: x10 zoom / last settings */
-    SETTING(INFO_button,                0,       6,      6),  /* default: Quick Panel */
+    SETTING(INFO_button,                0,       7,      6),  /* default: Quick Panel */
     SETTING(Shutter_rec,                0,       3,      0),
     SETTING(Arrows_U_D,                 0,       3,      3),
     SETTING(tapdisp,                    0,       5,      1),
